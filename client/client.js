@@ -21,6 +21,7 @@ window.__ModuleLoader__.load({
     const ROOT_ID = "dsh-weather-root";
     const STYLE_KEY = PLUGIN + "/weather.css";
     const FAB_ID = "dsh-weather-fab";
+    const HINT_ID = "dsh-weather-hint";
     const PANEL_ID = "dsh-weather-panel";
 
     /** Settings shape and defaults: rain at medium strength, no audio. */
@@ -31,6 +32,8 @@ window.__ModuleLoader__.load({
       sound: false,
       night: false,
       palette: true,
+      /* set once the first-run nudge has been shown and dismissed */
+      hintSeen: false,
     });
 
     const SCENES = ["rain", "snow", "fire", "none"];
@@ -235,6 +238,24 @@ window.__ModuleLoader__.load({
   transform: translateY(-1px);
 }
 #${FAB_ID} svg { width: 15px; height: 15px; display: block; }
+#${HINT_ID} {
+  position: fixed; right: 15px; bottom: 54px; z-index: 2147483000;
+  max-width: 200px; padding: 7px 10px 7px 11px; border-radius: 9px;
+  background: var(--dsw-alias-bg-module-platform, #e8eef5);
+  color: var(--dsw-alias-label-primary, #f9fafb);
+  border: 1px solid var(--dsw-alias-border-l3, #ffffff29);
+  box-shadow: 0 8px 24px #00000038;
+  font: 11.5px/1.55 -apple-system, "Segoe UI", "PingFang SC", sans-serif;
+  cursor: pointer; opacity: 0; transform: translateY(4px);
+  transition: opacity .18s ease, transform .18s ease;
+}
+#${HINT_ID}[data-show="true"] { opacity: 1; transform: none; }
+#${HINT_ID} i {
+  position: absolute; right: 11px; bottom: -5px; width: 8px; height: 8px;
+  background: inherit; transform: rotate(45deg);
+  border-right: 1px solid var(--dsw-alias-border-l3, #ffffff29);
+  border-bottom: 1px solid var(--dsw-alias-border-l3, #ffffff29);
+}
 
 #${PANEL_ID} {
   position: fixed;
@@ -326,6 +347,7 @@ body[data-ds-dark-theme] #${PANEL_ID} {
       if (typeof value.sound === "boolean") out.sound = value.sound;
       if (typeof value.night === "boolean") out.night = value.night;
       if (typeof value.palette === "boolean") out.palette = value.palette;
+      if (typeof value.hintSeen === "boolean") out.hintSeen = value.hintSeen;
       return out;
     }
 
@@ -1815,7 +1837,12 @@ body[data-ds-dark-theme] #${PANEL_ID} {
         '<button class="dshw-reset" type="button">恢复默认</button></div>',
       ].join("");
 
-      doc.body.append(fab, panel);
+      const hint = doc.createElement("div");
+      hint.id = HINT_ID;
+      hint.setAttribute("role", "status");
+      hint.innerHTML = '<span>点这里切换天气</span><i></i>';
+
+      doc.body.append(fab, panel, hint);
 
       const groups = {
         scene: panel.querySelector('[data-group="scene"]'),
@@ -1855,8 +1882,37 @@ body[data-ds-dark-theme] #${PANEL_ID} {
       }
       fab.addEventListener("click", (event) => {
         event.stopPropagation();
+        dismissHint(true);
         setOpen(!open);
       });
+      /* A nudger, not a label: it appears once on a fresh install, then stays
+         gone — clicking it, opening the panel or waiting it out all dismiss it. */
+      let hintShow = 0;
+      let hintHide = 0;
+      function dismissHint(persist) {
+        if (hintShow) { window.clearTimeout(hintShow); hintShow = 0; }
+        if (hintHide) { window.clearTimeout(hintHide); hintHide = 0; }
+        hint.dataset.show = "false";
+        if (persist) controller.dismissHint();
+      }
+      function syncHint(current) {
+        if (current.hintSeen) {
+          dismissHint(false);
+          return;
+        }
+        if (hintShow || hint.dataset.show === "true") return;
+        hintShow = window.setTimeout(() => {
+          hintShow = 0;
+          hint.dataset.show = "true";
+          hintHide = window.setTimeout(() => dismissHint(true), 12000);
+        }, 1600);
+      }
+      hint.addEventListener("click", (event) => {
+        event.stopPropagation();
+        dismissHint(true);
+        setOpen(true);
+      });
+
       const onDocumentClick = (event) => {
         if (!open) return;
         if (panel.contains(event.target) || fab.contains(event.target)) return;
@@ -1870,6 +1926,7 @@ body[data-ds-dark-theme] #${PANEL_ID} {
 
       /** Fill indicator inside the panel: minutes worked, bar, and full state. */
       function render(settings) {
+        syncHint(settings);
         fab.innerHTML = ICONS[settings.scene] || ICONS.rain;
         fab.title = "檐下 · " + (settings.scene === "none" ? "关" : sceneLabels[settings.scene])
           + " · v" + VERSION;
@@ -1928,7 +1985,7 @@ body[data-ds-dark-theme] #${PANEL_ID} {
         /* A reload can leave the previous mount behind (hot-swapped bundle, a
            duplicate entry, a crashed teardown). Stale roots would stack their
            veils, so every mount starts from a clean slate. */
-        for (const id of [ROOT_ID, FAB_ID, PANEL_ID]) {
+        for (const id of [ROOT_ID, FAB_ID, PANEL_ID, HINT_ID]) {
           for (const stale of doc.querySelectorAll("#" + id)) stale.remove();
         }
         const style = installStyle(doc);
@@ -2073,6 +2130,12 @@ body[data-ds-dark-theme] #${PANEL_ID} {
             listeners.add(listener);
             listener({ ...settings });
             return () => listeners.delete(listener);
+          },
+          /** Called by the panel once the first-run nudge has been seen. */
+          dismissHint() {
+            if (settings.hintSeen) return;
+            settings.hintSeen = true;
+            applyAll();
           },
           setScene(scene) {
             if (!SCENES.includes(scene)) return;
