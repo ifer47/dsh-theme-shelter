@@ -16,7 +16,7 @@ window.__ModuleLoader__.load({
     Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 
     const PLUGIN = "dsh-theme-shelter";
-    const VERSION = "0.2.1";
+    const VERSION = "0.3.0";
     const STORE_KEY = "dsh-theme-shelter/v2";
     const ROOT_ID = "dsh-weather-root";
     const STYLE_KEY = PLUGIN + "/weather.css";
