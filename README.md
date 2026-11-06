@@ -127,7 +127,7 @@ __dshWeather.reset()
 - 夜间模式不写你的外观偏好，所以设置页仍显示原来的浅色/深色；
 - 覆盖层叠在整个窗口上，模态框、菜单上面也会落雨落雪（透明度很低）；
 - 不改产品图标（那需要注册独立主题）；
-- 音频来自公开素材站，许可允许用于作品，引用时建议保留来源。
+- 音频来自 Pixabay（免费使用，见下方 Credits），引用时建议保留来源。
 
 ---
 
@@ -206,6 +206,20 @@ Three recordings (about 7.7 MB). The host half serves them read-only at `/dsh-th
 `preview/preview.html` is a standalone harness: it fakes the module loader and `ctx.theme`, so you can open it directly to see all three scenes, night mode and the panel.
 
 The profile links this package with `link:`, so editing `client/client.js` only needs a DSH restart.
+
+## Credits · 素材来源
+
+声音素材来自 **[Pixabay](https://pixabay.com/)**，按 [Pixabay Content License](https://pixabay.com/service/license-summary/) 免费使用：
+
+| 文件 | 用途 | 来源 |
+| --- | --- | --- |
+| `audio/rain.mp3` | 雨声循环（雪天复用，音量更低） | [pixabay.com](https://pixabay.com/) |
+| `audio/fire.mp3` | 炉火循环 | [pixabay.com](https://pixabay.com/) |
+| `audio/thunder.mp3` | 闪电后的一次性雷声 | [pixabay.com](https://pixabay.com/) |
+
+该许可允许免费用于商业与非商业作品、无需署名；但不允许把素材**原样单独再分发**。这里是把它作为插件的一部分打包使用，符合“用于更大的作品”的范围。如果你要替换音色，直接放同名文件进 `audio/` 即可。
+
+The ambience recordings come from **[Pixabay](https://pixabay.com/)** and are used under the [Pixabay Content License](https://pixabay.com/service/license-summary/): free for commercial and non-commercial use, no attribution required, but the files may not be redistributed as standalone assets. They are bundled here as part of a larger work. Drop a replacement with the same filename into `audio/` to swap a sound.
 
 ## License
 
