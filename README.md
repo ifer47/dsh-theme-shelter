@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 <img src="assets/logo.svg" width="76" height="76" alt="Shelter" />
 
@@ -19,9 +19,9 @@
 </div>
 
 <p align="center">
-  <img src="docs/night-rain.jpg" width="282" alt="Rain at night" />
-  <img src="docs/night-snow.jpg" width="282" alt="Snow at night" />
-  <img src="docs/night-fire.jpg" width="282" alt="Hearth at night" />
+  <img src="docs/night-rain.jpg" width="264" alt="Rain at night" />
+  <img src="docs/night-snow.jpg" width="264" alt="Snow at night" />
+  <img src="docs/night-fire.jpg" width="264" alt="Hearth at night" />
 </p>
 
 **Contents:** [Install](#install) · [Usage](#usage) · [Audio](#audio) · [How it works](#how-it-works) · [Development](#development) · [Credits](#credits)

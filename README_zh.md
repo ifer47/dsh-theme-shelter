@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 <img src="assets/logo.svg" width="76" height="76" alt="檐下" />
 
@@ -19,9 +19,9 @@
 </div>
 
 <p align="center">
-  <img src="docs/night-rain.jpg" width="282" alt="夜间 · 雨" />
-  <img src="docs/night-snow.jpg" width="282" alt="夜间 · 雪" />
-  <img src="docs/night-fire.jpg" width="282" alt="夜间 · 炉火" />
+  <img src="docs/night-rain.jpg" width="264" alt="夜间 · 雨" />
+  <img src="docs/night-snow.jpg" width="264" alt="夜间 · 雪" />
+  <img src="docs/night-fire.jpg" width="264" alt="夜间 · 炉火" />
 </p>
 
 **目录：** [安装](#安装) · [使用](#使用) · [声音](#声音) · [工作原理](#工作原理) · [本地开发](#本地开发) · [素材来源](#素材来源)
