@@ -50,6 +50,7 @@
     "docs",
     "cordis.patch.yml",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "README_zh.md"
   ]
 }
