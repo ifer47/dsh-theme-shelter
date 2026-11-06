@@ -19,17 +19,9 @@
 </div>
 
 <p align="center">
-  <img src="docs/preview-rain-light.jpg" width="860" alt="Shelter · rain, light" />
-</p>
-
-<p align="center">
-  <img src="docs/preview-rain-night.jpg" width="420" alt="Shelter · rain at night" />
-  <img src="docs/preview-snow.jpg" width="420" alt="Shelter · snow" />
-</p>
-
-<p align="center">
-  <img src="docs/preview-fire.jpg" width="420" alt="Shelter · hearth" />
-  <img src="docs/preview-panel.jpg" width="420" alt="Shelter · panel" />
+  <img src="docs/night-rain.jpg" width="282" alt="Rain at night" />
+  <img src="docs/night-snow.jpg" width="282" alt="Snow at night" />
+  <img src="docs/night-fire.jpg" width="282" alt="Hearth at night" />
 </p>
 
 **Contents:** [Install](#install) · [Usage](#usage) · [Audio](#audio) · [How it works](#how-it-works) · [Development](#development) · [Credits](#credits)

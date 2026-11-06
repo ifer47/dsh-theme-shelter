@@ -19,17 +19,9 @@
 </div>
 
 <p align="center">
-  <img src="docs/preview-rain-light.jpg" width="860" alt="檐下 · 雨（浅色）" />
-</p>
-
-<p align="center">
-  <img src="docs/preview-rain-night.jpg" width="420" alt="檐下 · 夜雨" />
-  <img src="docs/preview-snow.jpg" width="420" alt="檐下 · 雪" />
-</p>
-
-<p align="center">
-  <img src="docs/preview-fire.jpg" width="420" alt="檐下 · 炉火" />
-  <img src="docs/preview-panel.jpg" width="420" alt="檐下 · 面板" />
+  <img src="docs/night-rain.jpg" width="282" alt="夜间 · 雨" />
+  <img src="docs/night-snow.jpg" width="282" alt="夜间 · 雪" />
+  <img src="docs/night-fire.jpg" width="282" alt="夜间 · 炉火" />
 </p>
 
 **目录：** [安装](#安装) · [使用](#使用) · [声音](#声音) · [工作原理](#工作原理) · [本地开发](#本地开发) · [素材来源](#素材来源)
