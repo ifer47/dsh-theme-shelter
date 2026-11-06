@@ -430,16 +430,99 @@ body[data-ds-dark-theme] #${PANEL_ID} {
     // -------------------------------------------------------------------- audio
 
     /**
-     * Ambience from real recordings. The host half serves the mp3 files on
-     * `/dsh-theme-shelter/audio/<name>`; this half only owns the <audio> elements,
-     * their volumes, and the one-shot thunder clap.
+     * Snow ambience, generated rather than recorded: real snowfall is nearly
+     * silent, so a looped brown-noise bed through a slow-breathing lowpass
+     * stands in at whisper level. No asset, works before any recording loads.
+     */
+    function createSnowWind() {
+      /* whisper level: a fraction of the rain loudness */
+      const GUST_HZ = 0.07;
+      let ctx = null;
+      let gain = null;
+      let target = 0;
+
+      function ensure() {
+        if (ctx) return true;
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (typeof AC !== "function") return false;
+        try {
+          ctx = new AC();
+          const buffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+          const data = buffer.getChannelData(0);
+          let last = 0;
+          for (let i = 0; i < data.length; i += 1) {
+            const white = Math.random() * 2 - 1;
+            last = (last + 0.02 * white) / 1.02;
+            data[i] = last * 3.5;
+          }
+          const source = ctx.createBufferSource();
+          source.buffer = buffer;
+          source.loop = true;
+          const filter = ctx.createBiquadFilter();
+          filter.type = "lowpass";
+          filter.frequency.value = 420;
+          filter.Q.value = 0.7;
+          /* the wind breathes over roughly fifteen seconds */
+          const gust = ctx.createOscillator();
+          gust.frequency.value = GUST_HZ;
+          const gustDepth = ctx.createGain();
+          gustDepth.gain.value = 160;
+          gust.connect(gustDepth);
+          gustDepth.connect(filter.frequency);
+          gain = ctx.createGain();
+          gain.gain.value = 0;
+          source.connect(filter);
+          filter.connect(gain);
+          gain.connect(ctx.destination);
+          source.start();
+          gust.start();
+          return true;
+        } catch (error) {
+          ctx = null;
+          return false;
+        }
+      }
+
+      function applyFade() {
+        if (!ctx || !gain) return;
+        gain.gain.setTargetAtTime(target, ctx.currentTime, 0.6);
+      }
+
+      return {
+        setTarget(value) {
+          target = value;
+          if (value > 0 && !ensure()) return;
+          applyFade();
+          if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
+        },
+        resume() {
+          if (target <= 0 || !ensure()) return;
+          if (ctx.state === "suspended") ctx.resume().catch(() => {});
+          applyFade();
+        },
+        silence() {
+          target = 0;
+          applyFade();
+        },
+        get active() { return ctx !== null; },
+        get running() { return ctx !== null && ctx.state === "running" && target > 0; },
+      };
+    }
+
+    /**
+     * Ambience: real recordings for rain and fire, plus the procedural snow
+     * wind above. The host half serves the mp3 files on
+     * `/dsh-theme-shelter/audio/<name>`; this half owns the <audio> elements,
+     * their volumes, the one-shot thunder clap, and the snow wind graph.
      */
     function createAudio() {
       const BASE = "/dsh-theme-shelter/audio";
-      const FILES = { rain: "rain.mp3", snow: "rain.mp3", fire: "fire.mp3" };
+      const FILES = { rain: "rain.mp3", fire: "fire.mp3" };
       const THUNDER = "thunder.mp3";
       /* Per-intensity loudness. The mp3s are mastered hot, so these stay low. */
       const LOUDNESS = [0, 0.18, 0.3, 0.42];
+      /* snow wind stays at a whisper: a fraction of the rain levels */
+      const SNOW_LOUDNESS = [0, 0.04, 0.07, 0.11];
 
       let loop = null;
       let loopFile = "";
@@ -448,6 +531,7 @@ body[data-ds-dark-theme] #${PANEL_ID} {
       let enabled = false;
       let thunderEl = null;
       let thunderTimer = 0;
+      const snowWind = createSnowWind();
 
       function element(file, looped) {
         const el = new Audio(BASE + "/" + file);
@@ -498,6 +582,13 @@ body[data-ds-dark-theme] #${PANEL_ID} {
         /** Point the ambience at a scene; the element survives an intensity change. */
         play(scene, intensity) {
           enabled = true;
+          if (scene === "snow") {
+            /* real snowfall is near-silent: no loop, just the whisper of wind */
+            stopLoop();
+            snowWind.setTarget(SNOW_LOUDNESS[clamp(intensity, 0, 3)]);
+            return;
+          }
+          snowWind.setTarget(0);
           const file = FILES[scene] || FILES.rain;
           if (!loop || loopFile !== file) {
             stopLoop();
@@ -527,6 +618,7 @@ body[data-ds-dark-theme] #${PANEL_ID} {
           if (thunderTimer) window.clearTimeout(thunderTimer);
           thunderTimer = 0;
           if (thunderEl) thunderEl.pause();
+          snowWind.silence();
           if (!loop) return;
           fadeTo(loop, 0);
           /* Stop decoding once the fade lands, unless sound came back meanwhile. */
@@ -536,15 +628,18 @@ body[data-ds-dark-theme] #${PANEL_ID} {
         },
         /** Called from a user gesture when sound was restored from settings. */
         resume() {
-          if (!enabled || !loop) return;
+          if (!enabled) return;
+          snowWind.resume();
+          if (!loop) return;
           if (loop.paused) playSafe(loop);
           fadeTo(loop, target);
         },
         get ready() {
-          return loop !== null;
+          return loop !== null || snowWind.active;
         },
         get state() {
-          if (!loop) return "none";
+          if (snowWind.running) return "running";
+          if (!loop) return snowWind.active ? "suspended" : "none";
           return loop.paused ? "suspended" : "running";
         },
       };
@@ -552,12 +647,15 @@ body[data-ds-dark-theme] #${PANEL_ID} {
 
     // -------------------------------------------------------------------- scenes
 
-    /** 0 — rain: fine drizzle. Short tapered streaks, small droplets, puddle rings. */
     /**
-     * 0 — rain, modelled rather than drawn. Each drop carries a diameter and a
-     * distance: terminal velocity follows from the diameter (v ~ sqrt d), the
-     * screen speed from perspective (1/z), and the streak length from the
-     * shutter, so a close drop is long and blurred while a far one is a tick.
+     * 0 — rain, simulated in world units and then projected. Every drop
+     * carries a diameter (mm) and a depth z (m): terminal velocity follows the
+     * standard exponential fit (0.5 mm ≈ 2 m/s, 3 mm ≈ 8 m/s), wind is a
+     * world-space air speed each drop relaxes toward (fine drops respond
+     * faster than fat ones), and the screen motion, slant and motion-blur
+     * length all derive from the one projected velocity vector, so the slant
+     * no longer depends on depth. Splashes are powered by the world impact
+     * speed and scaled by the same projection as everything else.
      */
     function createRainScene(sprites) {
       const drops = [];
@@ -567,12 +665,13 @@ body[data-ds-dark-theme] #${PANEL_ID} {
       const streakCache = new Map();
       let width = 0;
       let height = 0;
-      let schemeRef = "light";
 
-      /* projection constant: a drop z metres away is 1/z as large and as fast */
-      const PIXELS_PER_METRE = 2600;
-      const EXPOSURE = 0.006;              // shutter, seconds
-      const LEN_SIZES = [16, 32, 64, 128];
+      /* projection: a drop z metres away renders 1/z as large and as slow */
+      const PIXELS_PER_METRE = 2200;
+      const SHUTTER = 0.65;              // shutter as a fraction of the frame
+      const GRAVITY = 9.8;               // m/s², world frame
+      const FLOOR_INSET = 9;             // sill line, px above the bottom edge
+      const LEN_SIZES = [16, 32, 64, 128, 192];
       const WIDTH_SIZES = [0.7, 1.0, 1.4, 1.9, 2.6];
 
       function bucket(sizes, value) {
@@ -582,9 +681,19 @@ body[data-ds-dark-theme] #${PANEL_ID} {
         return sizes[sizes.length - 1];
       }
 
-      /** Atlas-style fit: 0.5 mm drizzle ~ 2.2 m/s, 3 mm rain ~ 8.5 m/s. */
+      /** Exponential fit to measured fall speeds (diameter mm → m/s). */
       function terminalVelocity(diameter) {
-        return 9.2 * Math.sqrt(Math.min(6, diameter) / 3);
+        return 9.65 - 10.3 * Math.exp(-0.6 * diameter);
+      }
+
+      /** World air speed in m/s: a breeze that breathes and can briefly lull. */
+      function gust(clock) {
+        return 0.55 + 0.35 * Math.sin(clock * 0.19) + 0.18 * Math.sin(clock * 0.57 + 1.7);
+      }
+
+      /** Small drops ride the wind quickly; fat drops keep their heading. */
+      function responseTime(diameter) {
+        return 0.12 + 0.14 * diameter;
       }
 
       /**
@@ -630,19 +739,23 @@ body[data-ds-dark-theme] #${PANEL_ID} {
       function makeDrop(scheme, fromTop) {
         /* Light glass needs a little more body than a dark one to read as water. */
         const boost = scheme === "light" ? 1.25 : 1;
-        const z = random(1.2, 10);
-        const diameter = 0.35 + Math.pow(Math.random(), 1.8) * 2.6;
-        const speed = (terminalVelocity(diameter) * PIXELS_PER_METRE) / z;
+        /* Depth is biased away from the camera: near drops are rare but large,
+           the way a real volume of rain reads on a flat pane. */
+        const z = 2.4 + Math.pow(Math.random(), 1.45) * 9.6;
+        const diameter = 0.35 + Math.pow(Math.random(), 2.2) * 2.15;
+        const k = PIXELS_PER_METRE / z;
         return {
           z,
+          k,
           diameter,
-          speed,
-          x: random(-0.08, 1.08) * width,
-          y: fromTop ? -random(20, 140) : random(0, height),
-          width: clamp((diameter * 1.15 * PIXELS_PER_METRE) / (z * 900), 0.5, 2.4),
-          alpha: Math.min(0.55, (0.16 + 0.45 / z) * boost),
-          wobble: random(0, Math.PI * 2),
+          vt: terminalVelocity(diameter),
+          vx: 0,                          // world horizontal speed, m/s
+          tau: responseTime(diameter),
           angle: 0,
+          x: random(-0.08, 1.08) * width,
+          y: fromTop ? -random(20, 160) : random(0, height),
+          width: clamp((diameter * 1.15 * k) / 900, 0.5, 2.4),
+          alpha: Math.min(0.55, (0.16 + 0.45 / z) * boost),
         };
       }
 
@@ -657,53 +770,53 @@ body[data-ds-dark-theme] #${PANEL_ID} {
         };
       }
 
-      function gust(clock) {
-        /* slow, slightly irregular wind: the rain angle breathes instead of
-           switching between two states */
-        return 0.35 * (0.75 + 0.25 * Math.sin(clock * 0.21) + 0.12 * Math.sin(clock * 0.63 + 1.7));
-      }
-
       /**
-       * A drop hits the sill. Droplets leave at ~16% of the impact speed, plus a
-       * crown ring and — for close, fat drops — the Worthington jet that fires
-       * almost straight up.
+       * A drop hits the sill. Ejection speed is a fraction of the world
+       * impact speed (not the screen speed), everything is scaled by the same
+       * depth projection as the drop itself, and close fat drops can throw
+       * the Worthington jet that fires almost straight up.
        */
-      function splash(x, speed, diameter) {
+      function splash(x, z, k, impactSpeed, diameter) {
         if (splashes.length > 160) return;
-        const near = Math.max(0.35, 1 - (speed - 1200) / 6000);
-        /* keep the spray inside the bottom band: higher and it starts raining
-           on the composer, which reads as a glitch rather than weather */
-        const power = Math.min(420, speed * 0.11) * near;
-        const floor = height - 9;
+        const floor = height - FLOOR_INSET;
 
-        rings.push({ x, y: floor + 2, r: 2, target: 9 + 14 * near, life: 0.3, max: 0.3 });
+        /* crown ring: a few mm of capillary wave, projected */
+        rings.push({
+          x,
+          y: floor + 2,
+          r: 1.5,
+          target: clamp((0.006 + 0.006 * (impactSpeed / 9)) * k, 2.5, 26),
+          life: 0.3,
+          max: 0.3,
+        });
 
+        const eject = impactSpeed * 0.16;
         const count = 4 + Math.floor(Math.random() * 4 + diameter * 1.4);
         for (let index = 0; index < count; index += 1) {
           const spread = random(-1.35, 1.35);
-          const launch = power * random(0.3, 1.2);
+          const speed = eject * random(0.3, 1.2);
           splashes.push({
-            x: x + random(-9, 9),
+            x: x + random(-8, 8) * (k / 900),
             y: floor,
-            vx: Math.sin(spread) * launch,
-            vy: -Math.cos(spread) * launch * random(0.75, 1.25),
+            vx: Math.sin(spread) * speed * k,
+            vy: -Math.cos(spread) * speed * random(0.75, 1.25) * k,
+            g: GRAVITY * k,
             life: random(0.45, 0.85),
-            max: 0.85,
             phase: random(0, Math.PI * 2),
-            r: 0.9 + Math.random() * 1.7 * (0.6 + diameter * 0.15),
+            r: clamp((0.9 + Math.random() * 1.7 * (0.6 + diameter * 0.15)) * (k / 1100), 0.6, 3.2),
           });
         }
 
-        if (near > 0.5 && Math.random() < 0.75) {
+        if (z < 3.2 && diameter > 1.6 && Math.random() < 0.6) {
           splashes.push({
             x: x + random(-1.5, 1.5),
             y: floor,
-            vx: random(-20, 20),
-            vy: -power * random(0.7, 1.1),
+            vx: random(-22, 22) * (k / 900),
+            vy: -eject * random(0.85, 1.15) * 0.95 * k,
+            g: GRAVITY * k,
             life: random(0.55, 0.85),
-            max: 0.85,
             phase: random(0, Math.PI * 2),
-            r: 1.3 + Math.random() * 1.4,
+            r: clamp((1.3 + Math.random() * 1.4) * (k / 1100), 0.8, 3.6),
           });
         }
       }
@@ -712,7 +825,6 @@ body[data-ds-dark-theme] #${PANEL_ID} {
         reset(state) {
           width = state.w;
           height = state.h;
-          schemeRef = state.scheme;
           drops.length = 0;
           beads.length = 0;
           rings.length = 0;
@@ -723,22 +835,45 @@ body[data-ds-dark-theme] #${PANEL_ID} {
           for (let index = 0; index < beadCount; index += 1) beads.push(makeBead());
         },
 
+        /** Grow or shrink the population in place: no full-particle reset. */
+        retune(state) {
+          width = state.w;
+          height = state.h;
+          const budget = clamp(Math.round((width * height) / 6200 * DENSITY[state.intensity]), 24, 520);
+          while (drops.length > budget) drops.pop();
+          while (drops.length < budget) drops.push(makeDrop(state.scheme, false));
+          const beadCount = clamp(Math.round((width * height) / 42000), 12, 60);
+          while (beads.length > beadCount) beads.pop();
+          while (beads.length < beadCount) beads.push(makeBead());
+        },
+
         step(state, dt) {
           width = state.w;
           height = state.h;
-          schemeRef = state.scheme;
           const wind = gust(state.clock);
+          const floor = height - FLOOR_INSET;
 
           for (let index = 0; index < drops.length; index += 1) {
             const drop = drops[index];
-            /* light drops are pushed further off vertical than heavy ones */
-            drop.angle = Math.atan((wind * 26) / Math.max(0.6, drop.speed / 100));
-            drop.y += drop.speed * dt;
-            drop.x += Math.sin(drop.angle) * drop.speed * dt;
-            if (drop.y - 40 > height) {
-              if (Math.random() < 0.55) splash(drop.x, drop.speed, drop.diameter);
+            /* world-frame wind response: the screen slant follows the world
+               velocity, so it is identical at every depth */
+            drop.vx += (wind - drop.vx) * (1 - Math.exp(-dt / drop.tau));
+            drop.angle = Math.atan2(drop.vx, drop.vt);
+            const vyScreen = drop.vt * drop.k;
+            const vxScreen = drop.vx * drop.k;
+            const prevY = drop.y;
+            drop.y += vyScreen * dt;
+            drop.x += vxScreen * dt;
+
+            if (prevY <= floor && drop.y > floor) {
+              /* continuous hit: interpolate the impact point across the step */
+              const hit = (floor - prevY) / Math.max(1e-6, drop.y - prevY);
+              const hitX = drop.x - vxScreen * dt * (1 - hit);
+              if (drop.z < 5.5 && Math.random() < 0.6) {
+                splash(hitX, drop.z, drop.k, drop.vt, drop.diameter);
+              }
               drops[index] = makeDrop(state.scheme, true);
-            } else if (drop.x < -120 || drop.x > width + 120) {
+            } else if (drop.y - 40 > height || drop.x < -140 || drop.x > width + 140) {
               drops[index] = makeDrop(state.scheme, true);
             }
           }
@@ -756,24 +891,29 @@ body[data-ds-dark-theme] #${PANEL_ID} {
           for (let index = splashes.length - 1; index >= 0; index -= 1) {
             const drop = splashes[index];
             drop.life -= dt;
-            if (drop.life <= 0) {
-              splashes.splice(index, 1);
-              continue;
-            }
-            drop.vy += 900 * dt;
+            drop.vy += drop.g * dt;
             drop.x += drop.vx * dt;
             drop.y += drop.vy * dt;
+            if (drop.life <= 0 || drop.y > height - 3) {
+              splashes.splice(index, 1);
+            }
           }
         },
 
         draw(g, state) {
           const rgb = RAIN_RGB[state.scheme] || RAIN_RGB.light;
           const beadSprite = state.scheme === "dark" ? sprites.beadDark : sprites.beadLight;
+          /* motion blur spans where each drop actually travelled this frame */
+          const blurDt = clamp(state.dt || 1 / 60, 1 / 240, 1 / 12);
 
           /* far to near, so a close streak covers the ones behind it */
           drops.sort((a, b) => b.z - a.z);
           for (const drop of drops) {
-            const length = clamp(drop.speed * EXPOSURE, 7, 70);
+            const length = clamp(
+              Math.hypot(drop.vx * drop.k, drop.vt * drop.k) * blurDt * SHUTTER,
+              6,
+              150,
+            );
             const sprite = streakSprite(bucket(WIDTH_SIZES, drop.width), bucket(LEN_SIZES, length), rgb);
             const scaleY = length / sprite.length;
             g.save();
@@ -791,12 +931,12 @@ body[data-ds-dark-theme] #${PANEL_ID} {
 
             /* a drop outside the focal plane: one wide faint pass stands in for
                a real depth-of-field blur */
-            if (drop.z < 2.6) {
+            if (drop.z < 3.2) {
               g.strokeStyle = rgba(rgb, drop.alpha * 0.16);
               g.lineWidth = drop.width * 2.6;
               g.beginPath();
               g.moveTo(drop.x, drop.y);
-              g.lineTo(drop.x - Math.sin(drop.angle) * length * 0.9, drop.y - length * 0.9);
+              g.lineTo(drop.x - Math.sin(drop.angle) * length * 0.9, drop.y - Math.cos(drop.angle) * length * 0.9);
               g.stroke();
             }
           }
@@ -819,11 +959,9 @@ body[data-ds-dark-theme] #${PANEL_ID} {
             g.stroke();
           }
 
-          /* Splash droplets are not circles: above ~0.5 mm a flying drop is
-             flattened into an oblate spheroid, with the short axis along its
-             own velocity, so the ellipse turns as the droplet arcs. It also
-             keeps oscillating, so the flattening breathes instead of being
-             fixed. Small ones stay round: surface tension wins. */
+          /* Splash droplets are oblate spheroids: the short axis lies along
+             their own velocity, so the ellipse turns as the droplet arcs, and
+             the flattening keeps oscillating. Small ones stay round. */
           for (const drop of splashes) {
             g.globalAlpha = clamp(drop.life * 2.6, 0, 1);
             const base = clamp(1 - drop.r * 0.11, 0.7, 0.97);
@@ -849,26 +987,84 @@ body[data-ds-dark-theme] #${PANEL_ID} {
       };
     }
 
-    /** 1 — snow: drifting flakes with sway, glints, a soft bank at the bottom. */
+    /**
+     * 1 — snow, also world-first: each flake has a depth, a crystal type
+     * (dendrite aggregate or graupel) with a type-appropriate fall speed, a
+     * relaxed chase of a position-coherent wind field, and its own rotation.
+     * Landings feed a mass-based accumulation bank that grows while it snows
+     * instead of appearing fully formed, and glints are rate-limited by dt so
+     * 60 Hz and 120 Hz twinkle identically — and follow their flake.
+     */
     function createSnowScene(sprites) {
       const flakes = [];
       const glints = [];
       const bank = [];
       let width = 0;
       let height = 0;
+      let glintBudget = 0;
+
+      const PIXELS_PER_METRE = 1800;
+      const MAX_BANK = 26;               // px, the ridge stops growing here
+      const BANK_KERNEL = [0.18, 0.45, 1, 0.45, 0.18];
+
+      /* World air speed (m/s): a slow drift that can briefly reverse. */
+      function baseWind(clock) {
+        return 0.8 + 0.55 * Math.sin(clock * 0.11) + 0.3 * Math.sin(clock * 0.047 + 2.1);
+      }
+
+      /* Position-coherent turbulence: neighbours sway together, each flake
+         adding only a small personal wobble of its own. */
+      function turbulence(x, y, clock) {
+        return 0.28 * Math.sin(x * 0.004 + clock * 0.5)
+          + 0.22 * Math.cos(y * 0.005 - clock * 0.37 + x * 0.001)
+          + 0.16 * Math.sin((x + y) * 0.002 + clock * 0.83);
+      }
+
+      function windAt(x, y, clock) {
+        return baseWind(clock) + turbulence(x, y, clock);
+      }
+
+      /** Fill a flake in place, so glints holding a reference stay live. */
+      function seedFlake(target, scheme, fromTop) {
+        const type = Math.random() < 0.68 ? 0 : 1;   // 0 dendrite, 1 graupel
+        const size = type === 0 ? random(2.5, 7.5) : random(1.2, 3.5);  // mm
+        const z = 2.2 + Math.pow(Math.random(), 1.4) * 4.3;
+        const k = PIXELS_PER_METRE / z;
+        target.type = type;
+        target.size = size;
+        target.z = z;
+        target.k = k;
+        target.vt = type === 0
+          ? random(0.55, 1.0) * (1 + size / 30)
+          : random(1.1, 1.7);
+        target.vy = target.vt;
+        target.vx = 0;
+        target.tau = type === 0 ? 0.9 : 0.45;
+        target.r = clamp((size * k) / 1000, 0.7, 11);
+        target.x = random(0, width);
+        target.y = fromTop ? -random(6, 40) : random(-20, height);
+        target.phase = random(0, Math.PI * 2);
+        target.rot = random(0, Math.PI * 2);
+        target.rotSpeed = type === 0 ? random(-1.2, 1.2) : random(-0.4, 0.4);
+        target.alpha = clamp((0.35 + 0.5 / z) * (scheme === "light" ? 0.9 : 1), 0.25, 0.95);
+        /* sparkle needs directional light: night/dark scenes only */
+        target.twinkle = scheme === "dark" && type === 0 && Math.random() < 0.22;
+        return target;
+      }
 
       function makeFlake(scheme, fromTop) {
-        const size = random(0.8, 3);
-        return {
-          x: random(0, width),
-          y: fromTop ? -10 : random(0, height),
-          r: size,
-          vy: random(16, 54) * (0.6 + size / 5),
-          sway: random(6, 26),
-          phase: random(0, Math.PI * 2),
-          alpha: random(0.35, 0.92),
-          twinkle: Math.random() < 0.15,
-        };
+        return seedFlake({}, scheme, fromTop);
+      }
+
+      function deposit(flake) {
+        const column = Math.round(flake.x / 16);
+        const mass = flake.type === 0 ? 0.55 : 0.4;
+        for (let offset = -2; offset <= 2; offset += 1) {
+          const index = column + offset;
+          if (index < 0 || index >= bank.length) continue;
+          const gain = mass * BANK_KERNEL[offset + 2] * 0.6;
+          bank[index].h = Math.min(MAX_BANK, bank[index].h + gain);
+        }
       }
 
       return {
@@ -878,36 +1074,74 @@ body[data-ds-dark-theme] #${PANEL_ID} {
           flakes.length = 0;
           glints.length = 0;
           bank.length = 0;
+          glintBudget = 0;
           const budget = clamp(Math.round((width * height) / 11000 * DENSITY[state.intensity]), 30, 340);
           for (let index = 0; index < budget; index += 1) flakes.push(makeFlake(state.scheme, false));
-          for (let x = 0; x <= width; x += 16) {
-            bank.push({ x, h: 3 + Math.sin(x * 0.03) * 2 + Math.random() * 2 });
-          }
+          /* the bank starts empty: it exists only because snow has landed */
+          const columns = Math.ceil(width / 16) + 1;
+          for (let index = 0; index <= columns; index += 1) bank.push({ x: index * 16, h: 0 });
+        },
+
+        /** Adjust the population in place; accumulated snow is preserved. */
+        retune(state) {
+          width = state.w;
+          height = state.h;
+          const budget = clamp(Math.round((width * height) / 11000 * DENSITY[state.intensity]), 30, 340);
+          while (flakes.length > budget) flakes.pop();
+          while (flakes.length < budget) flakes.push(makeFlake(state.scheme, false));
+          const columns = Math.ceil(width / 16) + 1;
+          while (bank.length < columns) bank.push({ x: bank.length * 16, h: 0 });
+          while (bank.length > columns) bank.pop();
         },
 
         step(state, dt) {
           width = state.w;
           height = state.h;
-          const wind = 0.4 + 0.3 * Math.sin(state.clock * 0.23);
+          const clock = state.clock;
+          const floor = height - 4;
+
           for (let index = 0; index < flakes.length; index += 1) {
             const flake = flakes[index];
-            flake.y += flake.vy * dt;
-            flake.x += Math.sin(state.clock * 0.9 + flake.phase) * flake.sway * dt + wind * 14 * dt;
-            if (flake.y - flake.r > height) {
-              flakes[index] = makeFlake(state.scheme, true);
+            const target = windAt(flake.x, flake.y, clock);
+            flake.vx += (target - flake.vx) * (1 - Math.exp(-dt / flake.tau));
+            flake.vy = flake.vt * (1 + 0.12 * Math.sin(clock * 0.6 + flake.phase));
+            flake.rot += flake.rotSpeed * dt;
+            const prevY = flake.y;
+            flake.y += flake.vy * flake.k * dt;
+            flake.x += flake.vx * flake.k * dt + Math.sin(clock * 0.9 + flake.phase) * 4 * dt;
+
+            if (prevY <= floor && flake.y > floor) {
+              deposit(flake);
+              seedFlake(flake, state.scheme, true);
               continue;
             }
-            if (flake.x < -12) flake.x = width + 10;
-            else if (flake.x > width + 12) flake.x = -10;
+            if (flake.y - 30 > height) {
+              seedFlake(flake, state.scheme, true);
+              continue;
+            }
+            if (flake.x < -16) flake.x = width + 14;
+            else if (flake.x > width + 16) flake.x = -14;
+          }
+
+          /* gentle slumping: spikes relax into a soft ridge */
+          const relax = Math.min(1, dt * 1.5);
+          for (let index = 1; index < bank.length - 1; index += 1) {
+            const avg = (bank[index - 1].h + bank[index + 1].h) * 0.5;
+            bank[index].h += (avg - bank[index].h) * relax;
           }
 
           for (let index = glints.length - 1; index >= 0; index -= 1) {
             glints[index].life -= dt;
             if (glints[index].life <= 0) glints.splice(index, 1);
           }
-          if (glints.length < 10 && Math.random() < 0.12) {
-            const flake = flakes[Math.floor(Math.random() * flakes.length)];
-            if (flake) glints.push({ x: flake.x, y: flake.y, r: random(3, 7), life: random(0.5, 1.4), max: 1.4 });
+          /* dt-limited spawn: identical twinkle rate at any frame rate */
+          glintBudget += dt * 2.2;
+          while (glintBudget >= 1) {
+            glintBudget -= 1;
+            const candidates = flakes.filter((flake) => flake.twinkle);
+            if (!candidates.length) break;
+            const flake = candidates[Math.floor(Math.random() * candidates.length)];
+            glints.push({ flake, r: random(3, 7), life: random(0.4, 1.0), max: 1.0 });
           }
         },
 
@@ -915,12 +1149,18 @@ body[data-ds-dark-theme] #${PANEL_ID} {
           const rgb = SNOW_RGB[state.scheme] || SNOW_RGB.light;
           const sprite = state.scheme === "dark" ? sprites.flakeLight : sprites.flakeDark;
 
-          /* Accumulation bank: soft, low, and only once it is actually snowing. */
-          if (state.intensity >= 2) {
-            const rise = state.intensity === 3 ? 13 : 8;
-            const gradient = g.createLinearGradient(0, height - rise * 3, 0, height);
+          /* Accumulation bank: starts at zero, grows from landings, fades in
+             with the ridge itself. */
+          let ridge = 0;
+          for (const point of bank) {
+            if (point.h > ridge) ridge = point.h;
+          }
+          if (ridge > 0.5) {
+            const fade = clamp(ridge / 6, 0, 1);
+            const top = height - ridge - 6;
+            const gradient = g.createLinearGradient(0, top, 0, height);
             gradient.addColorStop(0, rgba(rgb, 0));
-            gradient.addColorStop(1, rgba(rgb, state.scheme === "dark" ? 0.16 : 0.2));
+            gradient.addColorStop(1, rgba(rgb, (state.scheme === "dark" ? 0.16 : 0.2) * fade));
             g.fillStyle = gradient;
             g.beginPath();
             g.moveTo(0, height);
@@ -931,33 +1171,43 @@ body[data-ds-dark-theme] #${PANEL_ID} {
           }
 
           for (const flake of flakes) {
-            const size = flake.r * (flake.r > 2.4 ? 5.4 : 4.2);
+            const size = flake.r * (flake.type === 0 ? 2.6 : 2.0) + 1.5;
+            g.save();
+            g.translate(flake.x, flake.y);
             g.globalAlpha = flake.alpha;
-            g.drawImage(sprite, flake.x - size / 2, flake.y - size / 2, size, size);
-            if (flake.r > 2.6) {
-              g.globalAlpha = flake.alpha * 0.32;
+            g.drawImage(sprite, -size / 2, -size / 2, size, size);
+            /* only in-focus dendrites show their six-fold structure, rotated */
+            if (flake.type === 0 && flake.r > 1.5) {
+              g.rotate(flake.rot);
+              g.globalAlpha = flake.alpha * 0.85;
               g.strokeStyle = rgba(rgb, 0.9);
-              g.lineWidth = 0.55;
+              g.lineWidth = Math.max(0.5, flake.r * 0.16);
               g.beginPath();
+              const arm = flake.r * 1.35;
               for (let spoke = 0; spoke < 3; spoke += 1) {
                 const angle = (Math.PI / 3) * spoke;
-                g.moveTo(flake.x - Math.cos(angle) * flake.r * 1.3, flake.y - Math.sin(angle) * flake.r * 1.3);
-                g.lineTo(flake.x + Math.cos(angle) * flake.r * 1.3, flake.y + Math.sin(angle) * flake.r * 1.3);
+                g.moveTo(-Math.cos(angle) * arm, -Math.sin(angle) * arm);
+                g.lineTo(Math.cos(angle) * arm, Math.sin(angle) * arm);
               }
               g.stroke();
             }
+            g.restore();
           }
           g.globalAlpha = 1;
 
           for (const glint of glints) {
-            const fade = clamp(glint.life / glint.max, 0, 1);
+            const t = clamp(glint.life / glint.max, 0, 1);
+            const fade = Math.sin(Math.PI * t);
+            const x = glint.flake.x;
+            const y = glint.flake.y;
+            const r = glint.r * (1.25 - 0.25 * t);
             g.strokeStyle = rgba(rgb, 0.75 * fade);
             g.lineWidth = 0.8;
             g.beginPath();
-            g.moveTo(glint.x - glint.r, glint.y);
-            g.lineTo(glint.x + glint.r, glint.y);
-            g.moveTo(glint.x, glint.y - glint.r);
-            g.lineTo(glint.x, glint.y + glint.r);
+            g.moveTo(x - r, y);
+            g.lineTo(x + r, y);
+            g.moveTo(x, y - r);
+            g.lineTo(x, y + r);
             g.stroke();
           }
         },
@@ -1173,6 +1423,7 @@ body[data-ds-dark-theme] #${PANEL_ID} {
         const elapsed = lastTime === 0 ? 16 : Math.min(64, now - lastTime);
         lastTime = now;
         const dt = elapsed / 1000;
+        state.dt = dt;
         state.clock += dt;
         if (current) {
           current.step(state, dt, state.clock);
@@ -1273,7 +1524,10 @@ body[data-ds-dark-theme] #${PANEL_ID} {
           if (!current) return;
           /* Unchanged intensity while the loop is already running: nothing to do. */
           if (!changed && running) return;
-          current.reset(state);
+          /* Scenes that support retune grow or shrink in place; a full reset
+             here used to throw every particle away on each intensity step. */
+          if (typeof current.retune === "function") current.retune(state);
+          else current.reset(state);
           stop();
           if (next > 0) start();
         },
