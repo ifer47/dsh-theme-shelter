@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/logo.svg" width="76" height="76" alt="檐下 · Shelter" />
+
 # 檐下 · Shelter
 
 **Immersive weather for DeepSeek Harness** — rain, snow and hearth, with real recordings.

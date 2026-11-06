@@ -2,6 +2,7 @@
   "name": "dsh-theme-shelter",
   "version": "0.1.0",
   "description": "Immersive weather ambience for the DeepSeek Harness Web GUI: rain, snow and fire scenes with real recordings. 沉浸式天气主题：雨天 / 雪天 / 炉火三场景，玻璃水珠与涟漪、真实录音的雨声与雷声、夜间模式。",
+  "icon": "assets/logo.svg",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -41,6 +42,7 @@
     }
   },
   "files": [
+    "assets",
     "lib",
     "client",
     "audio",

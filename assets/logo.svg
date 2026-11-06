@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="檐下 Shelter">
+  <defs>
+    <linearGradient id="canopy" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6FAFD6"/>
+      <stop offset="0.55" stop-color="#3E86B4"/>
+      <stop offset="1" stop-color="#2A6288"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- canopy: half disc with four scallops along the rim -->
+  <path d="M14 62a50 50 0 0 1 100 0q-12.5 15-25 0-12.5 15-25 0-12.5 15-25 0-12.5 15-25 0Z" fill="url(#canopy)"/>
+  <!-- soft light across the top half -->
+  <path d="M14 62a50 50 0 0 1 100 0q-25-26-50-26T14 62Z" fill="url(#shine)"/>
+
+  <!-- shaft and hook -->
+  <path d="M64 62v30a12 12 0 0 0 24 0" fill="none" stroke="#16324C" stroke-width="7" stroke-linecap="round"/>
+
+  <!-- rain under the open side -->
+  <g stroke="#6FAFD6" stroke-width="6" stroke-linecap="round" opacity="0.9">
+    <path d="M26 84 19 99"/>
+    <path d="M40 92 33 107"/>
+  </g>
+</svg>
