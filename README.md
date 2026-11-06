@@ -24,7 +24,7 @@
   <img src="docs/night-fire.jpg" width="264" alt="Hearth at night" />
 </p>
 
-**Contents:** [Install](#install) · [Usage](#usage) · [Audio](#audio) · [How it works](#how-it-works) · [Development](#development) · [Credits](#credits)
+**Contents:** [Scenes](#scenes) · [Install](#install) · [Usage](#usage) · [Audio](#audio) · [How it works](#how-it-works) · [Development](#development) · [Credits](#credits)
 
 ## What it is
 
@@ -36,8 +36,8 @@ It changes nothing about how DSH works — only the air you sit in while working
 
 | Scene | What you see | Palette |
 | --- | --- | --- |
-| **Rain** | Every streak is computed, not drawn: terminal velocity from the drop's diameter (`v ∝ √d`), speed and width from perspective (`1/z`), length from the shutter (`speed × exposure`). Thin and faint at the tail, widest at the head; drizzle slants further in wind than heavy rain; splashes and crown rings where drops land | Cool blue-grey, deep navy shadows |
-| **Snow** | Two crystal habits: dendrite aggregates (larger, slow, spinning, they twinkle in the dark) and graupel pellets (small, fast). Flakes ride one shared wind field, so neighbours sway together, and the bank at the bottom grows from what has actually landed | Colder and whiter, icy-blue accents |
+| **Rain** | Streaks that each fall at their own speed, slant with the wind, and splash where they land | Cool blue-grey, deep navy shadows |
+| **Snow** | Two kinds of crystal drifting through one wind field, over a bank that grows as it snows | Colder and whiter, icy-blue accents |
 | **Fire** | A warm pulse from below, rising embers, sparks, slow smoke | Warm neutrals, amber accents |
 
 Semantic colors (error red, success green, warning amber) are untouched in every scene.
@@ -69,10 +69,14 @@ Click the small button in the bottom-right corner:
 | --- | --- |
 | Scene | rain / snow / fire / off |
 | Intensity | light / medium / heavy |
-| Palette | master switch for the theme colors; the animation keeps running |
-| Lightning | rain only: a fractal bolt, a flash and a bang whose delay encodes distance (0.3–0.9 s when close, 1.5–2.8 s when far); close strikes then leave a cracked pane for 5–9 s. Roughly every 2–9 s, denser at intensity 3 |
-| Sound | recorded rain and fire, procedural wind for snow; browsers require one gesture first |
-| Night | forces the dark palette plus a moonlight wash |
+| Palette | theme colors on or off — the animation runs either way |
+| Lightning | rain only: bolt, flash, thunder |
+| Sound | rain and fire recorded, snow wind generated |
+| Night | dark palette plus a moonlight wash |
+
+**Lightning.** A strike draws a branched bolt across the sky, flashes the pane, then bangs. The delay encodes distance — 0.3–0.9 s when close, 1.5–2.8 s when far — and a close strike leaves a cracked pane for 5–9 s. Strikes land every 2–9 s, denser at intensity 3.
+
+**Sound.** Browsers refuse audio until the page has seen a click or a keypress, so the first sound arrives after your first interaction.
 
 Settings live in `localStorage["dsh-theme-shelter/v2"]` and survive reloads.
 
