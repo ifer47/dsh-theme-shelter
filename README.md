@@ -44,7 +44,7 @@ It changes nothing about how DSH works — only the air you sit in while working
 
 | Scene | What you see | Palette |
 | --- | --- | --- |
-| **Rain** | Tapered streaks (no head blobs, no long tails), a field of droplets, small ripples where drops land | Cool blue-grey, deep navy shadows |
+| **Rain** | Every streak is computed, not drawn: terminal velocity from the drop's diameter (`v ∝ √d`), speed and width from perspective (`1/z`), length from the shutter (`speed × exposure`). Thin and faint at the tail, widest at the head; drizzle slants further in wind than heavy rain; splashes and crown rings where drops land | Cool blue-grey, deep navy shadows |
 | **Snow** | Slow flakes, six-armed crystals up close, occasional glints, a soft bank at the bottom | Colder and whiter, icy-blue accents |
 | **Fire** | A warm pulse from below, rising embers, sparks, slow smoke | Warm neutrals, amber accents |
 
@@ -102,9 +102,11 @@ Three recordings (about 7.7 MB). The host half serves them read-only at `/dsh-th
 ## How it works
 
 - **Colors** — `ctx.theme.overrideTokens()` overrides 47 `--dsw-alias-*` tokens: surfaces, text, borders, code blocks, scrollbars. Button fills, brand colors, links and focus rings are deliberately left alone.
-- **Picture** — one fixed full-screen canvas with a particle system per scene, drawn from pre-rendered sprites.
+- **Rain** — every drop carries a diameter and a distance. Terminal velocity is `v = 9.2·√(d/3)` (0.5 mm ≈ 2.2 m/s, 3 mm ≈ 8.5 m/s); screen speed and width scale by `1/z`; the streak is `speed × 6 ms exposure`, clamped to 7–70 px; the angle is `atan(wind / speed)`, so drizzle leans further than heavy rain, over a slow gust envelope. Streaks taper from a thin tail to a bright head and are baked into sprites (5 width × 4 length buckets) so each drop costs one `drawImage`.
+- **Splashes** — a landing drop throws 5–9 droplets at 16% of its impact speed (scaled by distance) under 900 px/s² of gravity, plus a crown ring, plus a near-vertical Worthington jet for close, fat drops.
+- **Snow and fire** — their own particle systems, drawn from pre-rendered sprites.
 - **Audio** — a host-only read route plus `<audio>` on the client, fading out and releasing between scenes.
-- **Cost** — particle counts scale with viewport area and are capped; DPR is capped at 2; rendering pauses in a hidden window; `prefers-reduced-motion` draws a single static frame.
+- **Cost** — particle counts scale with viewport area and are capped (rain 520, snow 340, fire 64); DPR is capped at 2; rendering pauses in a hidden window; `prefers-reduced-motion` draws a single static frame.
 
 ## Development
 

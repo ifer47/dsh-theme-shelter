@@ -16,7 +16,7 @@ window.__ModuleLoader__.load({
     Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 
     const PLUGIN = "dsh-theme-shelter";
-    const VERSION = "0.1.0";
+    const VERSION = "0.2.0";
     const STORE_KEY = "dsh-theme-shelter/v2";
     const ROOT_ID = "dsh-weather-root";
     const STYLE_KEY = PLUGIN + "/weather.css";
@@ -164,13 +164,6 @@ window.__ModuleLoader__.load({
       for (const [name, value] of Object.entries(pairs)) out[name] = { light: value.dark, dark: value.dark };
       return out;
     }
-
-    /** Depth layers for rain: far streaks are short and faint, near ones long and fast. */
-    const RAIN_LAYERS = [
-      { share: 0.46, length: [7, 14], speed: [220, 430], width: [0.5, 0.8], alpha: [0.14, 0.3] },
-      { share: 0.36, length: [13, 26], speed: [520, 820], width: [0.8, 1.2], alpha: [0.18, 0.38] },
-      { share: 0.18, length: [22, 42], speed: [900, 1450], width: [1.2, 1.8], alpha: [0.14, 0.3] },
-    ];
 
     const STYLE_TEXT = `
 #${ROOT_ID} {
@@ -560,41 +553,100 @@ body[data-ds-dark-theme] #${PANEL_ID} {
     // -------------------------------------------------------------------- scenes
 
     /** 0 — rain: fine drizzle. Short tapered streaks, small droplets, puddle rings. */
+    /**
+     * 0 — rain, modelled rather than drawn. Each drop carries a diameter and a
+     * distance: terminal velocity follows from the diameter (v ~ sqrt d), the
+     * screen speed from perspective (1/z), and the streak length from the
+     * shutter, so a close drop is long and blurred while a far one is a tick.
+     */
     function createRainScene(sprites) {
       const drops = [];
       const beads = [];
       const rings = [];
       const splashes = [];
+      const streakCache = new Map();
       let width = 0;
       let height = 0;
       let schemeRef = "light";
 
-      function layer() {
-        const roll = Math.random();
-        if (roll < RAIN_LAYERS[0].share) return RAIN_LAYERS[0];
-        if (roll < RAIN_LAYERS[0].share + RAIN_LAYERS[1].share) return RAIN_LAYERS[1];
-        return RAIN_LAYERS[2];
+      /* projection constant: a drop z metres away is 1/z as large and as fast */
+      const PIXELS_PER_METRE = 2600;
+      const EXPOSURE = 0.006;              // shutter, seconds
+      const LEN_SIZES = [16, 32, 64, 128];
+      const WIDTH_SIZES = [0.7, 1.0, 1.4, 1.9, 2.6];
+
+      function bucket(sizes, value) {
+        for (const size of sizes) {
+          if (size >= value) return size;
+        }
+        return sizes[sizes.length - 1];
+      }
+
+      /** Atlas-style fit: 0.5 mm drizzle ~ 2.2 m/s, 3 mm rain ~ 8.5 m/s. */
+      function terminalVelocity(diameter) {
+        return 9.2 * Math.sqrt(Math.min(6, diameter) / 3);
+      }
+
+      /**
+       * A streak is the drop's motion blur: thin and faint at the tail, widest
+       * and brightest at the head. Baked once per width/length/scheme because
+       * six strokes per drop per frame cost a third of the frame budget.
+       */
+      function streakSprite(streakWidth, length, rgb) {
+        const key = streakWidth + "|" + length + "|" + rgb[0];
+        const hit = streakCache.get(key);
+        if (hit) return hit;
+
+        const pad = 3;
+        const headWidth = streakWidth * 1.15;
+        const tailWidth = streakWidth * 0.32;
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.ceil(headWidth + pad * 2);
+        canvas.height = length + pad * 2;
+        const g = canvas.getContext("2d");
+        const cx = canvas.width / 2;
+        const top = pad;
+        const bottom = pad + length;
+
+        const fill = g.createLinearGradient(0, top, 0, bottom);
+        fill.addColorStop(0, rgba(rgb, 0));
+        fill.addColorStop(0.45, rgba(rgb, 0.45));
+        fill.addColorStop(0.88, rgba(rgb, 0.95));
+        fill.addColorStop(1, rgba(rgb, 0.6));
+        g.fillStyle = fill;
+        g.beginPath();
+        g.moveTo(cx - tailWidth / 2, top);
+        g.quadraticCurveTo(cx - headWidth / 2, bottom - length * 0.35, cx - headWidth / 2, bottom - headWidth / 2);
+        g.arc(cx, bottom - headWidth / 2, headWidth / 2, Math.PI, 0);
+        g.quadraticCurveTo(cx + headWidth / 2, bottom - length * 0.35, cx + tailWidth / 2, top);
+        g.closePath();
+        g.fill();
+
+        const sprite = { canvas, width: canvas.width, height: canvas.height, length };
+        streakCache.set(key, sprite);
+        return sprite;
       }
 
       function makeDrop(scheme, fromTop) {
-        const spec = layer();
         /* Light glass needs a little more body than a dark one to read as water. */
-        const boost = scheme === "light" ? 1.35 : 1;
-        const alpha = Math.min(0.5, random(spec.alpha[0], spec.alpha[1]) * boost);
-        const length = random(spec.length[0], spec.length[1]) * random(0.7, 1.45);
+        const boost = scheme === "light" ? 1.25 : 1;
+        const z = random(1.2, 10);
+        const diameter = 0.35 + Math.pow(Math.random(), 1.8) * 2.6;
+        const speed = (terminalVelocity(diameter) * PIXELS_PER_METRE) / z;
         return {
+          z,
+          diameter,
+          speed,
           x: random(-0.08, 1.08) * width,
-          y: fromTop ? -length - random(0, height * 0.35) : random(0, height),
-          length,
-          speed: random(spec.speed[0], spec.speed[1]),
-          width: random(spec.width[0], spec.width[1]),
-          spread: random(0.75, 1.2),
-          alpha,
-          angle: random(-0.06, 0.06),
+          y: fromTop ? -random(20, 140) : random(0, height),
+          width: clamp((diameter * 1.15 * PIXELS_PER_METRE) / (z * 900), 0.5, 2.4),
+          alpha: Math.min(0.55, (0.16 + 0.45 / z) * boost),
+          wobble: random(0, Math.PI * 2),
+          angle: 0,
         };
       }
 
-      /** A droplet sitting on the glass: varied size, but it never moves or trails. */
+      /** A droplet sitting on the glass: varied size, but pinned — it never runs. */
       function makeBead() {
         const big = Math.random() < 0.14;
         return {
@@ -605,26 +657,51 @@ body[data-ds-dark-theme] #${PANEL_ID} {
         };
       }
 
-      function spawnRing(x) {
-        if (rings.length > 12) return;
-        const rgb = RAIN_RGB[schemeRef] || RAIN_RGB.light;
-        rings.push({
-          x,
-          y: height - 1,
-          r: random(0, 1),
-          target: random(4, 11),
-          color: rgba(rgb, random(0.05, 0.13)),
-        });
+      function gust(clock) {
+        /* slow, slightly irregular wind: the rain angle breathes instead of
+           switching between two states */
+        return 0.35 * (0.75 + 0.25 * Math.sin(clock * 0.21) + 0.12 * Math.sin(clock * 0.63 + 1.7));
       }
 
-      function splash(x) {
-        for (let index = 0; index < 2; index += 1) {
+      /**
+       * A drop hits the sill. Droplets leave at ~16% of the impact speed, plus a
+       * crown ring and — for close, fat drops — the Worthington jet that fires
+       * almost straight up.
+       */
+      function splash(x, speed, diameter) {
+        if (splashes.length > 160) return;
+        const near = Math.max(0.35, 1 - (speed - 1200) / 6000);
+        /* keep the spray inside the bottom band: higher and it starts raining
+           on the composer, which reads as a glitch rather than weather */
+        const power = Math.min(420, speed * 0.11) * near;
+        const floor = height - 9;
+
+        rings.push({ x, y: floor + 2, r: 2, target: 9 + 14 * near, life: 0.3, max: 0.3 });
+
+        const count = 4 + Math.floor(Math.random() * 4 + diameter * 1.4);
+        for (let index = 0; index < count; index += 1) {
+          const spread = random(-1.35, 1.35);
+          const launch = power * random(0.3, 1.2);
           splashes.push({
-            x,
-            y: height,
-            vx: random(-45, 45),
-            vy: random(-120, -60),
-            life: 0.32,
+            x: x + random(-9, 9),
+            y: floor,
+            vx: Math.sin(spread) * launch,
+            vy: -Math.cos(spread) * launch * random(0.75, 1.25),
+            life: random(0.45, 0.85),
+            max: 0.85,
+            r: 0.9 + Math.random() * 1.7 * (0.6 + diameter * 0.15),
+          });
+        }
+
+        if (near > 0.5 && Math.random() < 0.75) {
+          splashes.push({
+            x: x + random(-1.5, 1.5),
+            y: floor,
+            vx: random(-20, 20),
+            vy: -power * random(0.7, 1.1),
+            life: random(0.55, 0.85),
+            max: 0.85,
+            r: 1.3 + Math.random() * 1.4,
           });
         }
       }
@@ -638,7 +715,7 @@ body[data-ds-dark-theme] #${PANEL_ID} {
           beads.length = 0;
           rings.length = 0;
           splashes.length = 0;
-          const budget = clamp(Math.round((width * height) / 9000 * DENSITY[state.intensity]), 24, 460);
+          const budget = clamp(Math.round((width * height) / 6200 * DENSITY[state.intensity]), 24, 520);
           for (let index = 0; index < budget; index += 1) drops.push(makeDrop(state.scheme, false));
           const beadCount = clamp(Math.round((width * height) / 42000), 12, 60);
           for (let index = 0; index < beadCount; index += 1) beads.push(makeBead());
@@ -648,27 +725,30 @@ body[data-ds-dark-theme] #${PANEL_ID} {
           width = state.w;
           height = state.h;
           schemeRef = state.scheme;
-          const wind = 0.16 + 0.05 * Math.sin(state.clock * 0.4);
+          const wind = gust(state.clock);
 
           for (let index = 0; index < drops.length; index += 1) {
             const drop = drops[index];
+            /* light drops are pushed further off vertical than heavy ones */
+            drop.angle = Math.atan((wind * 26) / Math.max(0.6, drop.speed / 100));
             drop.y += drop.speed * dt;
-            drop.x += drop.speed * dt * wind * 0.5;
-            if (drop.y - drop.length > height) {
-              if (Math.random() < 0.14) {
-                spawnRing(drop.x);
-                if (state.intensity >= 3) splash(drop.x);
-              }
+            drop.x += Math.sin(drop.angle) * drop.speed * dt;
+            if (drop.y - 40 > height) {
+              if (Math.random() < 0.55) splash(drop.x, drop.speed, drop.diameter);
               drops[index] = makeDrop(state.scheme, true);
-            } else if (drop.x < -80 || drop.x > width + 80) {
+            } else if (drop.x < -120 || drop.x > width + 120) {
               drops[index] = makeDrop(state.scheme, true);
             }
           }
 
           for (let index = rings.length - 1; index >= 0; index -= 1) {
             const ring = rings[index];
-            ring.r += (ring.target - ring.r) * Math.min(1, dt * 3.4);
-            if (ring.r > ring.target - 0.6) rings.splice(index, 1);
+            ring.life -= dt;
+            if (ring.life <= 0) {
+              rings.splice(index, 1);
+              continue;
+            }
+            ring.r += (ring.target - ring.r) * Math.min(1, dt * 6);
           }
 
           for (let index = splashes.length - 1; index >= 0; index -= 1) {
@@ -688,26 +768,33 @@ body[data-ds-dark-theme] #${PANEL_ID} {
           const rgb = RAIN_RGB[state.scheme] || RAIN_RGB.light;
           const beadSprite = state.scheme === "dark" ? sprites.beadDark : sprites.beadLight;
 
-          /* Short tapered streaks only: no head blob and no long tail. */
-          g.lineCap = "round";
-          const wind = 0.16 + 0.05 * Math.sin(state.clock * 0.4);
-          const bands = [
-            [0, 0.55, 0.18, 0.45],
-            [0.55, 0.82, 0.45, 0.7],
-            [0.82, 1, 0.95, 1],
-          ];
+          /* far to near, so a close streak covers the ones behind it */
+          drops.sort((a, b) => b.z - a.z);
           for (const drop of drops) {
-            if (drop.length < 3) continue;
-            const tail = drop.y - drop.length;
-            const drift = Math.tan(drop.angle + wind * 0.55) * drop.length;
-            const ax = drop.x - drift;
-            const w = drop.width * drop.spread;
-            for (const [from, to, alphaScale, widthScale] of bands) {
-              g.strokeStyle = rgba(rgb, Math.min(0.8, drop.alpha * alphaScale));
-              g.lineWidth = w * widthScale;
+            const length = clamp(drop.speed * EXPOSURE, 7, 70);
+            const sprite = streakSprite(bucket(WIDTH_SIZES, drop.width), bucket(LEN_SIZES, length), rgb);
+            const scaleY = length / sprite.length;
+            g.save();
+            g.globalAlpha = drop.alpha;
+            g.translate(drop.x, drop.y);
+            g.rotate(-drop.angle);
+            g.drawImage(
+              sprite.canvas,
+              -sprite.width / 2,
+              -sprite.height * scaleY,
+              sprite.width,
+              sprite.height * scaleY,
+            );
+            g.restore();
+
+            /* a drop outside the focal plane: one wide faint pass stands in for
+               a real depth-of-field blur */
+            if (drop.z < 2.6) {
+              g.strokeStyle = rgba(rgb, drop.alpha * 0.16);
+              g.lineWidth = drop.width * 2.6;
               g.beginPath();
-              g.moveTo(ax + drift * from, tail + drop.length * from);
-              g.lineTo(ax + drift * to, tail + drop.length * to);
+              g.moveTo(drop.x, drop.y);
+              g.lineTo(drop.x - Math.sin(drop.angle) * length * 0.9, drop.y - length * 0.9);
               g.stroke();
             }
           }
@@ -720,19 +807,27 @@ body[data-ds-dark-theme] #${PANEL_ID} {
           }
           g.globalAlpha = 1;
 
+          /* crown rings where the drops land */
           for (const ring of rings) {
-            g.strokeStyle = ring.color;
-            g.lineWidth = 0.8;
+            const fade = clamp(ring.life / ring.max, 0, 1);
+            g.strokeStyle = rgba(rgb, 0.26 * fade);
+            g.lineWidth = 0.9;
             g.beginPath();
-            g.ellipse(ring.x, ring.y, ring.r, ring.r * 0.3, 0, 0, Math.PI * 2);
+            g.ellipse(ring.x, ring.y, ring.r, ring.r * 0.26, 0, 0, Math.PI * 2);
             g.stroke();
           }
 
-          g.fillStyle = rgba(rgb, 0.45);
+          /* splash droplets: a dark body and one offset highlight, so they read
+             as water at 2–4 px instead of as paint */
           for (const drop of splashes) {
-            g.globalAlpha = clamp(drop.life / 0.32, 0, 1);
+            g.globalAlpha = clamp(drop.life * 2.6, 0, 1);
+            g.fillStyle = rgba(rgb, 0.55);
             g.beginPath();
-            g.arc(drop.x, drop.y, 0.9, 0, Math.PI * 2);
+            g.arc(drop.x, drop.y, drop.r, 0, Math.PI * 2);
+            g.fill();
+            g.fillStyle = "rgba(255, 255, 255, 0.6)";
+            g.beginPath();
+            g.arc(drop.x - drop.r * 0.28, drop.y - drop.r * 0.32, Math.max(0.4, drop.r * 0.45), 0, Math.PI * 2);
             g.fill();
           }
           g.globalAlpha = 1;
