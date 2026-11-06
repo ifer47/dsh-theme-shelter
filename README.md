@@ -37,7 +37,7 @@ It changes nothing about how DSH works — only the air you sit in while working
 | Scene | What you see | Palette |
 | --- | --- | --- |
 | **Rain** | Every streak is computed, not drawn: terminal velocity from the drop's diameter (`v ∝ √d`), speed and width from perspective (`1/z`), length from the shutter (`speed × exposure`). Thin and faint at the tail, widest at the head; drizzle slants further in wind than heavy rain; splashes and crown rings where drops land | Cool blue-grey, deep navy shadows |
-| **Snow** | Slow flakes, six-armed crystals up close, occasional glints, a soft bank at the bottom | Colder and whiter, icy-blue accents |
+| **Snow** | Two crystal habits: dendrite aggregates (larger, slow, spinning, they twinkle in the dark) and graupel pellets (small, fast). Flakes ride one shared wind field, so neighbours sway together, and the bank at the bottom grows from what has actually landed | Colder and whiter, icy-blue accents |
 | **Fire** | A warm pulse from below, rising embers, sparks, slow smoke | Warm neutrals, amber accents |
 
 Semantic colors (error red, success green, warning amber) are untouched in every scene.
@@ -70,8 +70,8 @@ Click the small button in the bottom-right corner:
 | Scene | rain / snow / fire / off |
 | Intensity | light / medium / heavy |
 | Palette | master switch for the theme colors; the animation keeps running |
-| Lightning | rain only, every 7–22 s, with thunder |
-| Sound | real recordings; browsers require one gesture first |
+| Lightning | rain only: a fractal bolt, a flash and a bang whose delay encodes distance (0.3–0.9 s when close, 1.5–2.8 s when far); close strikes then leave a cracked pane for 5–9 s. Roughly every 2–9 s, denser at intensity 3 |
+| Sound | recorded rain and fire, procedural wind for snow; browsers require one gesture first |
 | Night | forces the dark palette plus a moonlight wash |
 
 Settings live in `localStorage["dsh-theme-shelter/v2"]` and survive reloads.
@@ -89,15 +89,18 @@ __dshWeather.reset()
 
 ## Audio
 
-Three recordings (about 7.7 MB). The host half serves them read-only at `/dsh-theme-shelter/audio/*` with `Range` (206), `HEAD`, a one-year immutable cache, and a 403 for cross-origin `Origin`. Snow reuses the rain loop at a lower volume.
+Rain and fire are recordings (about 6.7 MB). The host half serves them read-only at `/dsh-theme-shelter/audio/*` with `Range` (206), `HEAD`, a one-year immutable cache, and a 403 for cross-origin `Origin`.
+
+Snow has no recording, because real snowfall is nearly silent: it is a looped brown-noise bed through a lowpass that breathes over roughly fifteen seconds, held at a whisper (0.04 / 0.07 / 0.11 against rain’s 0.18 / 0.30 / 0.42). It needs no asset and starts before any file has loaded.
 
 ## How it works
 
 - **Colors** — `ctx.theme.overrideTokens()` overrides 47 `--dsw-alias-*` tokens: surfaces, text, borders, code blocks, scrollbars. Button fills, brand colors, links and focus rings are deliberately left alone.
 - **Rain** — every drop carries a diameter and a distance. Terminal velocity is `v = 9.2·√(d/3)` (0.5 mm ≈ 2.2 m/s, 3 mm ≈ 8.5 m/s); screen speed and width scale by `1/z`; the streak is `speed × 6 ms exposure`, clamped to 7–70 px; the angle is `atan(wind / speed)`, so drizzle leans further than heavy rain, over a slow gust envelope. Streaks taper from a thin tail to a bright head and are baked into sprites (5 width × 4 length buckets) so each drop costs one `drawImage`.
 - **Splashes** — a landing drop throws 5–9 droplets at 16% of its impact speed (scaled by distance) under 900 px/s² of gravity, plus a crown ring, plus a near-vertical Worthington jet for close, fat drops. Each droplet is an oblate ellipse flattened along its own velocity — and it oscillates while flying, so the flattening breathes; sub-0.5 mm droplets stay round.
-- **Snow and fire** — their own particle systems, drawn from pre-rendered sprites.
-- **Audio** — a host-only read route plus `<audio>` on the client, fading out and releasing between scenes.
+- **Snow** — crystals with habits. Two thirds are dendrite aggregates (2.5–7.5 mm, falling at 0.55–1.0 m/s, slow spin, twinkling in the dark) and the rest graupel (1.2–3.5 mm, 1.1–1.7 m/s). Each flake has a depth `z`; screen size is `size × 1800 / z`. They ride a position-coherent wind field (a slow base drift plus turbulence sampled from x, y and time) instead of each flake swaying on its own, and landings deposit mass into an accumulation ridge that grows while it snows instead of appearing pre-formed.
+- **Lightning** — a recursive bolt with 1–3 branches, drawn additively over the canvas; the flash and the thunder are scheduled separately so a distant strike flickers first and rumbles seconds later.
+- **Audio** — a host-only read route plus `<audio>` on the client for rain and fire, fading out and releasing between scenes, and a Web Audio graph for the snow wind.
 - **Cost** — particle counts scale with viewport area and are capped (rain 520, snow 340, fire 64); DPR is capped at 2; rendering pauses in a hidden window; `prefers-reduced-motion` draws a single static frame.
 
 ## Development
@@ -111,7 +114,7 @@ The profile links this package with `link:`, so editing `client/client.js` only 
 - Night mode does not write your appearance preference, so Settings still shows the light/dark you picked;
 - The overlay sits above the whole window, so dialogs and menus collect rain too (at very low opacity);
 - Product icons are not replaceable — that needs a registered theme;
-- Audio comes from Pixabay (see Credits); keep the source note when you reuse it.
+- The rain and fire recordings come from Pixabay (see Credits); the snow wind is generated, so there is nothing to credit there.
 
 ## Credits
 
@@ -119,7 +122,7 @@ The ambience recordings come from **[Pixabay](https://pixabay.com/)** and are us
 
 | File | Use |
 | --- | --- |
-| `audio/rain.mp3` | rain loop (reused for snow at a lower volume) |
+| `audio/rain.mp3` | rain loop |
 | `audio/fire.mp3` | hearth loop |
 | `audio/thunder.mp3` | one-shot thunder after a flash |
 
