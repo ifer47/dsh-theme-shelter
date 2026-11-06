@@ -16,7 +16,7 @@ window.__ModuleLoader__.load({
     Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 
     const PLUGIN = "dsh-theme-shelter";
-    const VERSION = "0.2.0";
+    const VERSION = "0.2.1";
     const STORE_KEY = "dsh-theme-shelter/v2";
     const ROOT_ID = "dsh-weather-root";
     const STYLE_KEY = PLUGIN + "/weather.css";
@@ -689,6 +689,7 @@ body[data-ds-dark-theme] #${PANEL_ID} {
             vy: -Math.cos(spread) * launch * random(0.75, 1.25),
             life: random(0.45, 0.85),
             max: 0.85,
+            phase: random(0, Math.PI * 2),
             r: 0.9 + Math.random() * 1.7 * (0.6 + diameter * 0.15),
           });
         }
@@ -701,6 +702,7 @@ body[data-ds-dark-theme] #${PANEL_ID} {
             vy: -power * random(0.7, 1.1),
             life: random(0.55, 0.85),
             max: 0.85,
+            phase: random(0, Math.PI * 2),
             r: 1.3 + Math.random() * 1.4,
           });
         }
@@ -817,14 +819,26 @@ body[data-ds-dark-theme] #${PANEL_ID} {
             g.stroke();
           }
 
-          /* splash droplets: a dark body and one offset highlight, so they read
-             as water at 2–4 px instead of as paint */
+          /* Splash droplets are not circles: above ~0.5 mm a flying drop is
+             flattened into an oblate spheroid, with the short axis along its
+             own velocity, so the ellipse turns as the droplet arcs. It also
+             keeps oscillating, so the flattening breathes instead of being
+             fixed. Small ones stay round: surface tension wins. */
           for (const drop of splashes) {
             g.globalAlpha = clamp(drop.life * 2.6, 0, 1);
+            const base = clamp(1 - drop.r * 0.11, 0.7, 0.97);
+            const flatten = clamp(base * (1 + 0.12 * Math.sin(drop.life * 40 + drop.phase)), 0.66, 1);
+            const heading = Math.atan2(drop.vy, drop.vx);
             g.fillStyle = rgba(rgb, 0.55);
+            g.save();
+            g.translate(drop.x, drop.y);
+            g.rotate(heading);
             g.beginPath();
-            g.arc(drop.x, drop.y, drop.r, 0, Math.PI * 2);
+            g.ellipse(0, 0, drop.r * flatten, drop.r, 0, 0, Math.PI * 2);
             g.fill();
+            g.restore();
+
+            /* the highlight stays in screen space: the light comes from above */
             g.fillStyle = "rgba(255, 255, 255, 0.6)";
             g.beginPath();
             g.arc(drop.x - drop.r * 0.28, drop.y - drop.r * 0.32, Math.max(0.4, drop.r * 0.45), 0, Math.PI * 2);
