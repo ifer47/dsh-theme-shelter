@@ -16,8 +16,9 @@
   <!-- soft light across the top half -->
   <path d="M14 62a50 50 0 0 1 100 0q-25-26-50-26T14 62Z" fill="url(#shine)"/>
 
-  <!-- shaft and hook -->
-  <path d="M64 62v30a12 12 0 0 0 24 0" fill="none" stroke="#16324C" stroke-width="7" stroke-linecap="round"/>
+  <!-- shaft and hook: mid blue so it still reads on a dark background -->
+  <path d="M64 62v30a12 12 0 0 0 24 0" fill="none" stroke="#3E86B4" stroke-width="7" stroke-linecap="round"/>
+  <path d="M64 62v30a12 12 0 0 0 24 0" fill="none" stroke="#FFFFFF" stroke-opacity="0.25" stroke-width="2.5" stroke-linecap="round"/>
 
   <!-- rain under the open side -->
   <g stroke="#6FAFD6" stroke-width="6" stroke-linecap="round" opacity="0.9">
