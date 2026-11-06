@@ -193,8 +193,10 @@ window.__ModuleLoader__.load({
   position: absolute;
   inset: 0;
   opacity: 0;
-  background: radial-gradient(120% 85% at 50% -12%,
-    rgba(230, 243, 255, 0.85), rgba(198, 224, 250, 0.28) 46%, rgba(255, 255, 255, 0) 76%);
+  --dshw-flash-x: 50%;
+  --dshw-peak: 0.85;
+  background: radial-gradient(120% 85% at var(--dshw-flash-x) -12%,
+    rgba(230, 243, 255, var(--dshw-peak)), rgba(198, 224, 250, calc(var(--dshw-peak) * 0.33)) 46%, rgba(255, 255, 255, 0) 76%);
 }
 #${ROOT_ID} > .dshw-flash[data-flashing="true"] { animation: dshw-flash 1100ms ease-out 1; }
 @keyframes dshw-flash {
@@ -600,8 +602,8 @@ body[data-ds-dark-theme] #${PANEL_ID} {
           target = LOUDNESS[clamp(intensity, 0, 3)];
           fadeTo(loop, target);
         },
-        /** One thunder clap, delayed so it reads as a distant rumble. */
-        thunder() {
+        /** One thunder clap; the delay carries the distance to the strike. */
+        thunder(delay) {
           if (!enabled) return;
           if (thunderTimer) window.clearTimeout(thunderTimer);
           thunderTimer = window.setTimeout(() => {
@@ -611,7 +613,7 @@ body[data-ds-dark-theme] #${PANEL_ID} {
             thunderEl.currentTime = 0;
             thunderEl.volume = 0.75;
             playSafe(thunderEl);
-          }, random(400, 2200));
+          }, typeof delay === "number" ? delay : random(400, 2200));
         },
         mute() {
           enabled = false;
@@ -1381,7 +1383,10 @@ body[data-ds-dark-theme] #${PANEL_ID} {
       let running = false;
       let frame = 0;
       let lastTime = 0;
-      let flashTimer = 0;
+      let strikeTimer = 0;
+      let crackTimer = 0;
+      let bolt = null;
+      let cracks = null;
 
       function paintMist() {
         let top;
@@ -1409,6 +1414,8 @@ body[data-ds-dark-theme] #${PANEL_ID} {
         canvas.style.width = width + "px";
         canvas.style.height = height + "px";
         if (g) g.setTransform(dpr, 0, 0, dpr, 0, 0);
+        bolt = null;
+        cracks = null;
         if (current) current.reset(state);
       }
 
@@ -1416,6 +1423,7 @@ body[data-ds-dark-theme] #${PANEL_ID} {
         if (!g || !current) return;
         g.clearRect(0, 0, state.w, state.h);
         current.draw(g, state);
+        drawStrike(g);
       }
 
       function tick(now) {
@@ -1441,32 +1449,241 @@ body[data-ds-dark-theme] #${PANEL_ID} {
         running = true;
         lastTime = 0;
         frame = window.requestAnimationFrame(tick);
-        scheduleFlash();
+        scheduleStrike();
       }
 
       function stop() {
         running = false;
         if (frame) window.cancelAnimationFrame(frame);
         frame = 0;
-        if (flashTimer) window.clearTimeout(flashTimer);
-        flashTimer = 0;
+        if (strikeTimer) window.clearTimeout(strikeTimer);
+        if (crackTimer) window.clearTimeout(crackTimer);
+        strikeTimer = 0;
+        crackTimer = 0;
         if (g) g.clearRect(0, 0, state.w, state.h);
       }
 
-      function scheduleFlash() {
-        if (flashTimer) window.clearTimeout(flashTimer);
-        flashTimer = 0;
+      /* --- lightning: a fractal bolt, a randomized flash and, when the
+         strike is close enough, the pane cracks at the thunder moment --- */
+
+      function makeBoltPath(x0, y0, x1, y1) {
+        let pts = [{ x: x0, y: y0 }, { x: x1, y: y1 }];
+        for (let pass = 0; pass < 6; pass += 1) {
+          const next = [pts[0]];
+          for (let i = 1; i < pts.length; i += 1) {
+            const p0 = pts[i - 1];
+            const p1 = pts[i];
+            const dx = p1.x - p0.x;
+            const dy = p1.y - p0.y;
+            const len = Math.hypot(dx, dy) || 1;
+            /* midpoint displacement, perpendicular to the segment */
+            const off = (Math.random() - 0.5) * len * 0.45;
+            next.push({ x: (p0.x + p1.x) / 2 - (dy / len) * off, y: (p0.y + p1.y) / 2 + (dx / len) * off }, p1);
+          }
+          pts = next;
+        }
+        return pts;
+      }
+
+      function strokePath(c, pts, width, style) {
+        c.strokeStyle = style;
+        c.lineWidth = width;
+        c.beginPath();
+        c.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i += 1) c.lineTo(pts[i].x, pts[i].y);
+        c.stroke();
+      }
+
+      /* real glass cracks run thick at the impact and hairline at the tips */
+      function strokeTapered(c, pts, w0, w1, style) {
+        const n = pts.length;
+        const tiers = 3;
+        for (let t = 0; t < tiers; t += 1) {
+          const i0 = Math.floor((n - 1) * (t / tiers));
+          const i1 = Math.floor((n - 1) * ((t + 1) / tiers));
+          const seg = pts.slice(i0, i1 + 1);
+          if (seg.length < 2) continue;
+          strokePath(c, seg, w0 + (w1 - w0) * (t / (tiers - 1)), style);
+        }
+      }
+
+      function buildCracks(ix, iy) {
+        const dpr = clamp(window.devicePixelRatio || 1, 1, 2);
+        const cv = doc.createElement("canvas");
+        cv.width = Math.max(1, Math.round(state.w * dpr));
+        cv.height = Math.max(1, Math.round(state.h * dpr));
+        const c = cv.getContext("2d");
+        c.scale(dpr, dpr);
+        /* a crack reads as a dark groove with a bright glass edge beside it */
+        const groove = state.scheme === "dark" ? "rgba(6, 14, 24, 0.55)" : "rgba(24, 40, 56, 0.6)";
+        const edge = state.scheme === "dark" ? "rgba(214, 234, 252, 0.6)" : "rgba(240, 248, 255, 0.85)";
+
+        function jagged(x, y, angle, steps, stepLen) {
+          const pts = [{ x, y }];
+          let a = angle;
+          for (let i = 0; i < steps; i += 1) {
+            /* brittle radial cracks straighten as they travel outward */
+            const decay = 1 - 0.55 * (i / Math.max(1, steps - 1));
+            a += (Math.random() - 0.5) * 0.26 * decay;
+            x += Math.cos(a) * stepLen;
+            y += Math.sin(a) * stepLen;
+            pts.push({ x, y });
+          }
+          return pts;
+        }
+
+        /* primary radial cracks, some with sub-branches */
+        const count = 6 + Math.floor(Math.random() * 4);
+        for (let i = 0; i < count; i += 1) {
+          const base = (i / count) * Math.PI * 2 + random(-0.22, 0.22);
+          const steps = 9 + Math.floor(Math.random() * 15);
+          const main = jagged(ix, iy, base, steps, random(17, 30));
+          strokeTapered(c, main.map((pt) => ({ x: pt.x, y: pt.y + 0.9 })), 1.7, 0.8, groove);
+          strokeTapered(c, main, 1.25, 0.45, edge);
+          if (Math.random() < 0.7) {
+            const bp = main[2 + Math.floor(Math.random() * (main.length - 3))];
+            const branch = jagged(bp.x, bp.y, base + random(-0.95, 0.95), Math.max(3, Math.floor(steps * 0.5)), random(10, 18));
+            strokePath(c, branch.map((pt) => ({ x: pt.x, y: pt.y + 0.9 })), 0.9, groove);
+            strokePath(c, branch, 0.55, edge);
+          }
+        }
+
+        /* shattered core at the impact point */
+        for (let i = 0; i < 16; i += 1) {
+          const a = random(0, Math.PI * 2);
+          const len = random(7, 22);
+          strokePath(c, [{ x: ix, y: iy }, { x: ix + Math.cos(a) * len, y: iy + Math.sin(a) * len }], 1.0, edge);
+        }
+
+        /* two broken concentric rings around the impact */
+        for (let ring = 0; ring < 2; ring += 1) {
+          const r = ring === 0 ? random(30, 52) : random(64, 112);
+          const segs = 9 + Math.floor(Math.random() * 6);
+          let a0 = random(0, Math.PI * 2);
+          c.strokeStyle = edge;
+          c.lineWidth = 0.8;
+          for (let i = 0; i < segs; i += 1) {
+            const a1 = a0 + (Math.PI * 2 / segs) * random(0.45, 0.8);
+            c.beginPath();
+            c.arc(ix, iy, r, a0, a1);
+            c.stroke();
+            a0 = a1 + random(0.06, 0.4);
+          }
+        }
+        return cv;
+      }
+
+      function drawStrike(c) {
+        const now = state.clock;
+        if (bolt) {
+          const t = (now - bolt.born) / bolt.life;
+          if (t >= 1) {
+            bolt = null;
+          } else {
+            const a = (1 - t) * (1 - t);
+            c.save();
+            c.globalCompositeOperation = "lighter";
+            c.lineCap = "round";
+            strokePath(c, bolt.pts, 5.5, "rgba(190, 220, 250, " + (0.3 * a).toFixed(3) + ")");
+            strokePath(c, bolt.pts, 1.8, "rgba(240, 248, 255, " + (0.95 * a).toFixed(3) + ")");
+            for (const branch of bolt.branches) {
+              strokePath(c, branch, 1.1, "rgba(220, 238, 254, " + (0.7 * a).toFixed(3) + ")");
+            }
+            c.restore();
+          }
+        }
+        if (cracks) {
+          const age = now - cracks.born;
+          if (age > cracks.hold + cracks.fade) {
+            cracks = null;
+          } else {
+            let a = 1;
+            if (age < 0.45) a = 1 + (1 - age / 0.45) * 0.7; /* fresh crack glints */
+            else if (age > cracks.hold) a = Math.max(0, 1 - (age - cracks.hold) / cracks.fade);
+            a = Math.min(1, a);
+            if (a > 0.01) {
+              if (age < 0.4) {
+                /* the impact punch lands with the thunder */
+                const ga = (1 - age / 0.4) * 0.38;
+                const glow = c.createRadialGradient(cracks.x, cracks.y, 0, cracks.x, cracks.y, 130);
+                glow.addColorStop(0, "rgba(235, 246, 255, " + ga.toFixed(3) + ")");
+                glow.addColorStop(1, "rgba(235, 246, 255, 0)");
+                c.fillStyle = glow;
+                c.fillRect(cracks.x - 130, cracks.y - 130, 260, 260);
+              }
+              c.globalAlpha = a;
+              c.drawImage(cracks.cv, 0, 0, state.w, state.h);
+              c.globalAlpha = 1;
+            }
+          }
+        }
+      }
+
+      function clearStrike() {
+        if (strikeTimer) window.clearTimeout(strikeTimer);
+        if (crackTimer) window.clearTimeout(crackTimer);
+        strikeTimer = 0;
+        crackTimer = 0;
+        bolt = null;
+        cracks = null;
+      }
+
+      function scheduleStrike() {
+        if (strikeTimer) window.clearTimeout(strikeTimer);
+        if (crackTimer) window.clearTimeout(crackTimer);
+        strikeTimer = 0;
+        crackTimer = 0;
         if (!running || state.scene !== "rain" || !state.lightning || prefersReducedMotion()) return;
-        flashTimer = window.setTimeout(() => {
-          flashTimer = 0;
+        /* storms rage harder at intensity 3 */
+        const gap = Math.max(1800, random(8000, 20000) / (0.55 + 0.3 * state.intensity) - 5000);
+        strikeTimer = window.setTimeout(() => {
+          strikeTimer = 0;
           if (!running || !state.lightning || state.scene !== "rain") return;
+          const close = Math.random() < 0.45;
+          const bx = state.w * random(0.2, 0.8);
+          const ix = close ? state.w * random(0.24, 0.76) : bx + random(-40, 40);
+          const iy = close ? state.h * random(0.2, 0.62) : state.h * random(0.35, 0.6);
+          bolt = {
+            pts: makeBoltPath(bx, -30, ix, iy),
+            branches: [],
+            born: state.clock,
+            life: random(0.2, 0.32),
+          };
+          const branchCount = 1 + Math.floor(Math.random() * 3);
+          for (let i = 0; i < branchCount; i += 1) {
+            const at = bolt.pts[Math.floor(bolt.pts.length * random(0.15, 0.6))];
+            const dir = Math.random() < 0.5 ? -1 : 1;
+            bolt.branches.push(makeBoltPath(
+              at.x, at.y,
+              at.x + dir * state.w * random(0.05, 0.14),
+              at.y + state.h * random(0.08, 0.2),
+            ));
+          }
+          flash.style.setProperty("--dshw-flash-x", ((bx / state.w) * 100).toFixed(1) + "%");
+          flash.style.setProperty("--dshw-peak", close ? "0.95" : "0.6");
           flash.dataset.flashing = "true";
-          hooks.thunder();
           window.setTimeout(() => {
             if (flash.dataset) delete flash.dataset.flashing;
           }, 1100);
-          scheduleFlash();
-        }, random(7000, 22000));
+          /* sound lags the light by the distance to the strike */
+          const thunderDelay = close ? random(320, 850) : random(1500, 2800);
+          hooks.thunder(thunderDelay);
+          if (close) {
+            crackTimer = window.setTimeout(() => {
+              crackTimer = 0;
+              if (!running || !state.lightning || state.scene !== "rain") return;
+              cracks = {
+                cv: buildCracks(ix, iy),
+                x: ix,
+                y: iy,
+                born: state.clock,
+                hold: random(5, 9),
+                fade: 2.5,
+              };
+            }, thunderDelay);
+          }
+          scheduleStrike();
+        }, gap);
       }
 
       const onResize = () => {
@@ -1505,6 +1722,7 @@ body[data-ds-dark-theme] #${PANEL_ID} {
           /* Same scene again (a palette or night toggle calls this too): the
              particles are already rebuilt, so do not throw them away. */
           if (next === state.scene && target === current) return;
+          clearStrike();
           state.scene = next;
           current = target;
           paintMist();
@@ -1540,12 +1758,12 @@ body[data-ds-dark-theme] #${PANEL_ID} {
           state.night = !!on;
           root.dataset.night = on ? "true" : "false";
           paintMist();
-          scheduleFlash();
+          scheduleStrike();
           if (!running) renderOnce();
         },
         setLightning(on) {
           state.lightning = !!on;
-          scheduleFlash();
+          scheduleStrike();
         },
         dispose() {
           stop();
@@ -1714,7 +1932,7 @@ body[data-ds-dark-theme] #${PANEL_ID} {
           for (const stale of doc.querySelectorAll("#" + id)) stale.remove();
         }
         const style = installStyle(doc);
-        const engine = createWeatherEngine(doc, { thunder: () => audio.thunder() });
+        const engine = createWeatherEngine(doc, { thunder: (delay) => audio.thunder(delay) });
         const listeners = new Set();
         let paletteDispose = null;
         let paletteKey = null;
