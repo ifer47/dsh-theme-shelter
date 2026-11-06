@@ -1,0 +1,5 @@
+# dsh bundle patch: inserts this plugin into a profile's layer stack.
+# 把本插件挂进 profile 的插件树；客户端半边由 dsh.client 声明自动加载。
+- insert:
+    - id: theme-shelter
+      name: 'dsh-theme-shelter'

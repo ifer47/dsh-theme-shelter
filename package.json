@@ -1,0 +1,53 @@
+{
+  "name": "dsh-theme-shelter",
+  "version": "0.1.0",
+  "description": "Immersive weather ambience for the DeepSeek Harness Web GUI: rain, snow and fire scenes with real recordings. 沉浸式天气主题：雨天 / 雪天 / 炉火三场景，玻璃水珠与涟漪、真实录音的雨声与雷声、夜间模式。",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./client/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "deepseek",
+    "harness",
+    "dsh",
+    "dsh-plugin",
+    "theme",
+    "rain"
+  ],
+  "author": "ifer47",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ifer47/dsh-theme-shelter.git"
+  },
+  "homepage": "https://github.com/ifer47/dsh-theme-shelter",
+  "bugs": {
+    "url": "https://github.com/ifer47/dsh-theme-shelter/issues"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-theme"
+      ],
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "files": [
+    "lib",
+    "client",
+    "audio",
+    "preview",
+    "docs",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ]
+}

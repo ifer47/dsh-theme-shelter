@@ -1,0 +1,1584 @@
+/**
+ * dsh-theme-shelter — browser half.
+ *
+ * A weather theme for the DSH Web GUI: a palette token-override layer plus a
+ * canvas overlay that can rain, snow, or burn. A small translucent button at
+ * the bottom-right corner opens the only UI this plugin owns.
+ *
+ * Bundle contract: a DSH client bundle only registers a lazy CJS factory here;
+ * the body below runs when the plugin is materialized.
+ */
+window.__ModuleLoader__.load({
+  id: "dsh-theme-shelter",
+  factory: (require) => {
+    var module = { exports: {} };
+    var exports = module.exports;
+    Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+
+    const PLUGIN = "dsh-theme-shelter";
+    const VERSION = "0.1.0";
+    const STORE_KEY = "dsh-theme-shelter/v2";
+    const ROOT_ID = "dsh-weather-root";
+    const STYLE_KEY = PLUGIN + "/weather.css";
+    const FAB_ID = "dsh-weather-fab";
+    const PANEL_ID = "dsh-weather-panel";
+
+    /** Settings shape and defaults: rain at medium strength, no audio. */
+    const DEFAULTS = Object.freeze({
+      scene: "rain",
+      intensity: 2,
+      lightning: false,
+      sound: false,
+      night: false,
+      palette: true,
+    });
+
+    const SCENES = ["rain", "snow", "fire", "none"];
+    const DENSITY = [0, 0.55, 1, 1.75];
+
+    /**
+     * Token override layer: one `{ light, dark }` pair per alias token, folded
+     * into the active theme by the theme service. Only tokens that carry the
+     * weather mood are overridden; semantic state colors keep their meaning.
+     */
+    const TOKENS = {
+      "--dsw-alias-bg-base": { light: "#eef3f8", dark: "#0c141d" },
+      "--dsw-alias-bg-layer-1": { light: "#f9fbfd", dark: "#101a24" },
+      "--dsw-alias-bg-layer-2": { light: "#f2f6fa", dark: "#14202c" },
+      "--dsw-alias-bg-layer-3": { light: "#fbfdff", dark: "#182634" },
+      "--dsw-alias-bg-overlay": { light: "#e7eef6", dark: "#16222f" },
+      "--dsw-alias-bg-module-platform": { light: "#e8eef5", dark: "#12202c" },
+      "--dsw-alias-bg-multi-select": { light: "#e8eef5", dark: "#12202c" },
+      "--dsw-alias-bg-skeleton": { light: "#16324f0f", dark: "#ffffff0f" },
+      "--dsw-specific-sidebar-fill": { light: "#e9f0f7", dark: "#0a1219" },
+      "--dsw-specific-input-major": { light: "#fbfdff", dark: "#111c27" },
+      "--dsw-specific-login-input": { light: "#f2f6fa", dark: "#14202c" },
+      "--dsw-specific-selector": { light: "#e6edf5", dark: "#1b2a39" },
+      "--dsw-specific-bubble": { light: "#dfeaf6", dark: "#16283a" },
+      "--dsw-specific-bubble-highlight": { light: "#cfe1f2", dark: "#1d3549" },
+      "--dsw-specific-tip": { light: "#eef4fa", dark: "#152230" },
+      "--dsw-menu-surface-fill": { light: "#f8fbffb8", dark: "#172433a8" },
+      "--dsw-alias-menu-group-header-fill": { light: "#f2f7fcf0", dark: "#16222ff0" },
+      "--dsw-alias-label-primary": { light: "#14212e", dark: "#e6eef7" },
+      "--dsw-alias-label-primary-bluish": { light: "#17364f", dark: "#cfe3f4" },
+      "--dsw-alias-label-primary-dimmed": { light: "#0f1b26", dark: "#f2f7fc" },
+      "--dsw-alias-label-secondary": { light: "#4a5a6b", dark: "#a6b8c9" },
+      "--dsw-alias-label-tertiary": { light: "#66788b", dark: "#8195a8" },
+      "--dsw-alias-label-caption": { light: "#8596a6", dark: "#6b8095" },
+      "--dsw-alias-label-dimmed": { light: "#c3d0dc", dark: "#35485a" },
+      "--dsw-alias-border-l1": { light: "#16324f0f", dark: "#ffffff0f" },
+      "--dsw-alias-border-l2": { light: "#16324f1a", dark: "#ffffff1c" },
+      "--dsw-alias-border-l3": { light: "#16324f24", dark: "#ffffff29" },
+      "--dsw-alias-border-l4": { light: "#16324f2e", dark: "#ffffff3d" },
+      "--dsw-alias-interactive-bg-hover": { light: "#1d4f7d14", dark: "#8fc4ea14" },
+      "--dsw-alias-interactive-bg-active": { light: "#1d4f7d1f", dark: "#8fc4ea21" },
+      "--dsw-alias-interactive-bg-hover-solid": { light: "#e6eef7", dark: "#1a2836" },
+      "--dsw-alias-markdown-code-block": { light: "#eaf1f8", dark: "#0f1a24" },
+      "--dsw-alias-markdown-code-block-banner": { light: "#e3ecf5", dark: "#132231" },
+      "--dsw-alias-markdown-inline-code": { light: "#e5eef7", dark: "#14212e" },
+      "--dsw-alias-markdown-tag": { light: "#dde8f2", dark: "#1a2b3a" },
+      "--dsw-alias-markdown-citation": { light: "#e3edf7", dark: "#14222f" },
+      "--dsw-alias-markdown-placeholder": { light: "#dbe5ef", dark: "#1a2836" },
+      "--dsw-alias-scrollbar-bg-l1": { light: "#c3d2e0", dark: "#26374a" },
+      "--dsw-alias-scrollbar-bg-l2": { light: "#c3d2e0", dark: "#26374a" },
+      "--dsw-alias-scrollbar-hover-l1": { light: "#a9bccc", dark: "#354a60" },
+      "--dsw-alias-scrollbar-hover-l2": { light: "#a9bccc", dark: "#354a60" },
+      "--dsw-alias-settings-card-fill": { light: "#ffffff", dark: "#101a24" },
+      "--dsw-alias-settings-card-stroke": { light: "#16324f24", dark: "#ffffff1f" },
+      "--dsw-alias-illustration-background": { light: "#e4edf5", dark: "#0f1b26" },
+      "--dsw-alias-illustration-surface": { light: "#f2f7fb", dark: "#16242f" },
+      "--dsw-alias-illustration-backing": { light: "#cbd9e6", dark: "#20323f" },
+      "--dsw-alias-illustration-detail": { light: "#b9cbdb", dark: "#375068" },
+    };
+
+    /**
+     * Night mode forces the dark palette regardless of the user's appearance
+     * preference, so both arms of every pair carry the dark value: whichever
+     * scheme the theme service resolves, the night layer wins.
+     */
+    const NIGHT_TOKENS = Object.fromEntries(
+      Object.entries(TOKENS).map(([name, value]) => [name, { light: value.dark, dark: value.dark }]),
+    );
+
+    const RAIN_RGB = { dark: [186, 222, 250], light: [46, 78, 110] };
+    const SNOW_RGB = { dark: [226, 240, 253], light: [96, 124, 158] };
+    const FIRE_RGB = [255, 168, 82];
+
+    /**
+     * Per-scene temperature on top of the rain palette: snow reads colder and
+     * whiter, fire replaces the blue with an ember-warm neutral. Only tokens
+     * that change the mood are listed; everything else inherits TOKENS.
+     */
+    const SCENE_TOKENS = {
+      rain: {},
+      snow: {
+        "--dsw-alias-bg-base": { light: "#f4f8fc", dark: "#0b1118" },
+        "--dsw-alias-bg-layer-1": { light: "#ffffff", dark: "#0f1720" },
+        "--dsw-alias-bg-layer-2": { light: "#f7fbff", dark: "#131c26" },
+        "--dsw-alias-bg-layer-3": { light: "#ffffff", dark: "#17212c" },
+        "--dsw-specific-sidebar-fill": { light: "#edf4fa", dark: "#090f15" },
+        "--dsw-specific-bubble": { light: "#e6f1fb", dark: "#13202e" },
+        "--dsw-specific-bubble-highlight": { light: "#d7e8f7", dark: "#1a2b3c" },
+        "--dsw-alias-label-primary": { light: "#16232e", dark: "#eaf3fb" },
+        "--dsw-alias-label-secondary": { light: "#4c5f70", dark: "#aec3d5" },
+      },
+      fire: {
+        "--dsw-alias-bg-base": { light: "#f6f0e9", dark: "#140f0c" },
+        "--dsw-alias-bg-layer-1": { light: "#fcf8f4", dark: "#1a1310" },
+        "--dsw-alias-bg-layer-2": { light: "#f6efe8", dark: "#221812" },
+        "--dsw-alias-bg-layer-3": { light: "#fffaf5", dark: "#271b13" },
+        "--dsw-alias-bg-overlay": { light: "#efe5db", dark: "#221812" },
+        "--dsw-alias-bg-module-platform": { light: "#f1e8de", dark: "#1e1510" },
+        "--dsw-specific-sidebar-fill": { light: "#f3eae1", dark: "#120d0a" },
+        "--dsw-specific-input-major": { light: "#fffaf5", dark: "#1a1310" },
+        "--dsw-specific-bubble": { light: "#f8e8d9", dark: "#2a1b12" },
+        "--dsw-specific-bubble-highlight": { light: "#f2d9c4", dark: "#342216" },
+        "--dsw-menu-surface-fill": { light: "#fdf7f1b8", dark: "#241a14a8" },
+        "--dsw-alias-menu-group-header-fill": { light: "#f8efe6f0", dark: "#241a14f0" },
+        "--dsw-alias-label-primary": { light: "#2b1d13", dark: "#f7ead9" },
+        "--dsw-alias-label-primary-bluish": { light: "#4a2a18", dark: "#ffe0bd" },
+        "--dsw-alias-label-secondary": { light: "#6b5443", dark: "#c9b39c" },
+        "--dsw-alias-label-tertiary": { light: "#8a7059", dark: "#a8927b" },
+        "--dsw-alias-label-caption": { light: "#a58c74", dark: "#8a7461" },
+        "--dsw-alias-border-l1": { light: "#4a2c1a0f", dark: "#ffffff0f" },
+        "--dsw-alias-border-l2": { light: "#4a2c1a1a", dark: "#ffffff1c" },
+        "--dsw-alias-border-l3": { light: "#4a2c1a24", dark: "#ffffff29" },
+        "--dsw-alias-border-l4": { light: "#4a2c1a2e", dark: "#ffffff3d" },
+        "--dsw-alias-interactive-bg-hover": { light: "#8a4a1a12", dark: "#ffb87714" },
+        "--dsw-alias-interactive-bg-active": { light: "#8a4a1a1f", dark: "#ffb87721" },
+        "--dsw-alias-markdown-code-block": { light: "#f4e9de", dark: "#1d140f" },
+        "--dsw-alias-markdown-code-block-banner": { light: "#efe2d5", dark: "#231811" },
+        "--dsw-alias-markdown-inline-code": { light: "#f2e6da", dark: "#20160f" },
+        "--dsw-alias-settings-card-fill": { light: "#fffaf5", dark: "#1a1310" },
+        "--dsw-alias-settings-card-stroke": { light: "#4a2c1a24", dark: "#ffffff1f" },
+        "--dsw-alias-scrollbar-bg-l1": { light: "#d6c2ae", dark: "#3a2b20" },
+        "--dsw-alias-scrollbar-bg-l2": { light: "#d6c2ae", dark: "#3a2b20" },
+        "--dsw-alias-scrollbar-hover-l1": { light: "#c4ab93", dark: "#4d3a2b" },
+        "--dsw-alias-scrollbar-hover-l2": { light: "#c4ab93", dark: "#4d3a2b" },
+      },
+    };
+
+    /** Copy one scene's pairs with the dark arm on both sides, for night mode. */
+    function nightify(pairs) {
+      const out = {};
+      for (const [name, value] of Object.entries(pairs)) out[name] = { light: value.dark, dark: value.dark };
+      return out;
+    }
+
+    /** Depth layers for rain: far streaks are short and faint, near ones long and fast. */
+    const RAIN_LAYERS = [
+      { share: 0.46, length: [7, 14], speed: [220, 430], width: [0.5, 0.8], alpha: [0.14, 0.3] },
+      { share: 0.36, length: [13, 26], speed: [520, 820], width: [0.8, 1.2], alpha: [0.18, 0.38] },
+      { share: 0.18, length: [22, 42], speed: [900, 1450], width: [1.2, 1.8], alpha: [0.14, 0.3] },
+    ];
+
+    const STYLE_TEXT = `
+#${ROOT_ID} {
+  position: fixed;
+  inset: 0;
+  z-index: 2147480000;
+  pointer-events: none;
+  overflow: hidden;
+  contain: layout style paint;
+  opacity: 0;
+  transition: opacity 900ms ease;
+}
+#${ROOT_ID}[data-ready="true"] { opacity: 1; }
+#${ROOT_ID} > canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#${ROOT_ID} > .dshw-mist { position: absolute; inset: -12%; transition: opacity 600ms ease; }
+#${ROOT_ID} > .dshw-night {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 800ms ease;
+  background:
+    radial-gradient(125% 85% at 78% -14%, rgba(150, 190, 235, 0.10), rgba(150, 190, 235, 0) 55%),
+    linear-gradient(180deg, rgba(8, 18, 34, 0.18) 0%, rgba(5, 12, 24, 0.24) 100%);
+}
+#${ROOT_ID}[data-night="true"] > .dshw-night { opacity: 1; }
+#${ROOT_ID} > .dshw-flash {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: radial-gradient(120% 85% at 50% -12%,
+    rgba(230, 243, 255, 0.85), rgba(198, 224, 250, 0.28) 46%, rgba(255, 255, 255, 0) 76%);
+}
+#${ROOT_ID} > .dshw-flash[data-flashing="true"] { animation: dshw-flash 1100ms ease-out 1; }
+@keyframes dshw-flash {
+  0% { opacity: 0; }
+  4% { opacity: 0.72; }
+  9% { opacity: 0.16; }
+  14% { opacity: 0.5; }
+  27% { opacity: 0.08; }
+  45% { opacity: 0; }
+  100% { opacity: 0; }
+}
+
+#${FAB_ID} {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 2147480100;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  color: var(--dsw-alias-label-secondary, #61666b);
+  background: color-mix(in srgb, var(--dsw-alias-bg-layer-3, #fff) 76%, transparent);
+  border: 1px solid var(--dsw-alias-border-l2, #0000001a);
+  box-shadow: 0 2px 10px #00000018;
+  backdrop-filter: blur(10px);
+  opacity: 0.55;
+  transition: opacity 160ms ease, transform 160ms ease, color 160ms ease;
+}
+#${FAB_ID}:hover, #${FAB_ID}:focus-visible, #${FAB_ID}[aria-expanded="true"] {
+  opacity: 1;
+  color: var(--dsw-alias-label-primary, #0f1115);
+  transform: translateY(-1px);
+}
+#${FAB_ID} svg { width: 15px; height: 15px; display: block; }
+
+#${PANEL_ID} {
+  position: fixed;
+  right: 14px;
+  bottom: 50px;
+  z-index: 2147480101;
+  width: 232px;
+  padding: 10px 12px 11px;
+  border-radius: 14px;
+  color: var(--dsw-alias-label-primary, #0f1115);
+  background: var(--dsw-alias-bg-layer-3, #fff);
+  border: 1px solid var(--dsw-alias-border-l2, #0000001a);
+  box-shadow: 0 18px 44px #0000002e;
+  font: 12px/1.5 -apple-system, "Segoe UI", "PingFang SC", sans-serif;
+  display: none;
+}
+#${PANEL_ID}[data-open="true"] { display: block; }
+/* Segmented surfaces are not the theme's own tokens: in dark the rain palette
+   makes bg-layer-1 darker than the panel, so a "selected" pill drawn with it
+   reads as a hole. These two values keep "tray darker, selected lighter" in
+   both schemes, whoever owns the palette underneath. */
+#${PANEL_ID} { --dshw-tray: #e8eef5; --dshw-pill: #ffffff; --dshw-pill-stroke: #0000001f; }
+body[data-ds-dark-theme] #${PANEL_ID} {
+  --dshw-tray: #0d1721;
+  --dshw-pill: #24384c;
+  --dshw-pill-stroke: #ffffff1f;
+}
+#${PANEL_ID} .dshw-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
+#${PANEL_ID} .dshw-title { font-size: 12px; font-weight: 600; letter-spacing: .01em; }
+#${PANEL_ID} .dshw-close {
+  border: 0; background: transparent; color: var(--dsw-alias-label-tertiary, #66788b);
+  font: inherit; font-size: 14px; line-height: 1; cursor: pointer; padding: 2px 4px; border-radius: 6px;
+}
+#${PANEL_ID} .dshw-close:hover { color: var(--dsw-alias-label-primary, #0f1115); background: var(--dsw-alias-interactive-bg-hover, #2631480f); }
+#${PANEL_ID} .dshw-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 9px; }
+#${PANEL_ID} .dshw-label { color: var(--dsw-alias-label-secondary, #4a5a6b); font-size: 11.5px; }
+#${PANEL_ID} .dshw-seg {
+  display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px;
+  background: var(--dshw-tray);
+}
+#${PANEL_ID} .dshw-seg button {
+  font: inherit; font-size: 11.5px; line-height: 1; padding: 4px 8px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--dsw-alias-label-secondary, #4a5a6b); cursor: pointer;
+}
+#${PANEL_ID} .dshw-seg button.is-on {
+  background: var(--dshw-pill); color: var(--dsw-alias-label-primary, #0f1115);
+  box-shadow: 0 0 0 0.5px var(--dshw-pill-stroke);
+}
+#${PANEL_ID} .dshw-seg button:disabled { opacity: .4; cursor: default; }
+#${PANEL_ID} .dshw-toggles {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px;
+  margin-top: 9px; padding: 2px; border-radius: 8px;
+  background: var(--dshw-tray);
+}
+#${PANEL_ID} .dshw-toggle {
+  font: inherit; font-size: 11.5px; line-height: 1; padding: 6px 2px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--dsw-alias-label-secondary, #4a5a6b);
+  cursor: pointer; text-align: center; min-width: 0;
+}
+#${PANEL_ID} .dshw-toggle[aria-pressed="true"] {
+  background: var(--dshw-pill);
+  color: var(--dsw-alias-label-primary, #0f1115);
+  box-shadow: 0 0 0 0.5px var(--dshw-pill-stroke);
+}
+#${PANEL_ID} .dshw-toggle:disabled { opacity: .4; cursor: default; }
+#${PANEL_ID} .dshw-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+#${PANEL_ID} .dshw-hint { color: var(--dsw-alias-label-tertiary, #66788b); font-size: 10.5px; }
+#${PANEL_ID} .dshw-reset {
+  font: inherit; font-size: 10.5px; line-height: 1; padding: 3px 0; border: 0; background: transparent;
+  color: var(--dsw-alias-label-tertiary, #66788b); cursor: pointer; text-decoration: underline;
+}
+#${PANEL_ID} .dshw-reset:hover { color: var(--dsw-alias-label-primary, #0f1115); }
+
+@media (prefers-reduced-motion: reduce) {
+  #${ROOT_ID} { transition: none; }
+  #${ROOT_ID} > .dshw-flash[data-flashing="true"] { animation: none; }
+  #${FAB_ID} { transition: none; }
+}
+`;
+
+    // ---------------------------------------------------------------- settings
+
+    function sanitizeSettings(value) {
+      const out = {};
+      if (value === null || typeof value !== "object") return out;
+      if (SCENES.includes(value.scene)) out.scene = value.scene;
+      if (value.intensity === 1 || value.intensity === 2 || value.intensity === 3) out.intensity = value.intensity;
+      if (typeof value.lightning === "boolean") out.lightning = value.lightning;
+      if (typeof value.sound === "boolean") out.sound = value.sound;
+      if (typeof value.night === "boolean") out.night = value.night;
+      if (typeof value.palette === "boolean") out.palette = value.palette;
+      return out;
+    }
+
+    function readSettings() {
+      const settings = { ...DEFAULTS };
+      try {
+        /* The first key wins; the rest are the archives of earlier names, read
+           once so a rename does not drop the user's scene and switches. */
+        const raw = window.localStorage.getItem(STORE_KEY)
+          || window.localStorage.getItem("dsh-theme-rain/v2")
+          || window.localStorage.getItem("dsh-theme-shelter/v1")
+          || window.localStorage.getItem("dsh-theme-rain/v1");
+        if (raw) Object.assign(settings, sanitizeSettings(JSON.parse(raw)));
+      } catch (error) {
+        /* A blocked or full localStorage must not break the theme. */
+      }
+      return settings;
+    }
+
+    function writeSettings(settings) {
+      try {
+        window.localStorage.setItem(STORE_KEY, JSON.stringify(settings));
+      } catch (error) {
+        /* ignore */
+      }
+    }
+
+    // ---------------------------------------------------------------- utilities
+
+    function clamp(value, min, max) {
+      return value < min ? min : value > max ? max : value;
+    }
+
+    function random(min, max) {
+      return min + Math.random() * (max - min);
+    }
+
+    function rgba(rgb, alpha) {
+      return "rgba(" + rgb[0] + ", " + rgb[1] + ", " + rgb[2] + ", " + alpha.toFixed(3) + ")";
+    }
+
+    function prefersReducedMotion() {
+      return typeof window.matchMedia === "function"
+        && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    }
+
+    // ------------------------------------------------------------------ sprites
+
+    function sprite(size, paint) {
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      paint(canvas.getContext("2d"), size);
+      return canvas;
+    }
+
+    /** Soft round glow used for snow, embers and sparks. */
+    function glowSprite(rgb, hardness) {
+      return sprite(64, (g, size) => {
+        const c = size / 2;
+        const gradient = g.createRadialGradient(c, c, 0, c, c, c);
+        gradient.addColorStop(0, rgba(rgb, 1));
+        gradient.addColorStop(hardness, rgba(rgb, 0.65));
+        gradient.addColorStop(1, rgba(rgb, 0));
+        g.fillStyle = gradient;
+        g.beginPath();
+        g.arc(c, c, c, 0, Math.PI * 2);
+        g.fill();
+      });
+    }
+
+    /** A water bead on glass: bright offset highlight, soft rim tinted per scheme. */
+    function beadSprite(rim) {
+      return sprite(64, (g, size) => {
+        const c = size / 2;
+        const edge = g.createRadialGradient(c, c, c * 0.58, c, c, c);
+        edge.addColorStop(0, rgba(rim, 0));
+        edge.addColorStop(0.82, rgba(rim, 0.17));
+        edge.addColorStop(1, rgba(rim, 0));
+        g.fillStyle = edge;
+        g.beginPath();
+        g.arc(c, c, c, 0, Math.PI * 2);
+        g.fill();
+
+        const body = g.createRadialGradient(c, c, 2, c, c, c);
+        body.addColorStop(0, "rgba(255,255,255,0.30)");
+        body.addColorStop(0.72, "rgba(222,238,250,0.18)");
+        body.addColorStop(1, "rgba(222,238,250,0)");
+        g.fillStyle = body;
+        g.beginPath();
+        g.arc(c, c, c, 0, Math.PI * 2);
+        g.fill();
+
+        const highlight = g.createRadialGradient(c * 0.68, c * 0.62, 1, c * 0.68, c * 0.62, c * 0.42);
+        highlight.addColorStop(0, "rgba(255,255,255,0.95)");
+        highlight.addColorStop(1, "rgba(255,255,255,0)");
+        g.fillStyle = highlight;
+        g.beginPath();
+        g.arc(c * 0.68, c * 0.62, c * 0.42, 0, Math.PI * 2);
+        g.fill();
+      });
+    }
+
+    // -------------------------------------------------------------------- audio
+
+    /**
+     * Ambience from real recordings. The host half serves the mp3 files on
+     * `/dsh-theme-shelter/audio/<name>`; this half only owns the <audio> elements,
+     * their volumes, and the one-shot thunder clap.
+     */
+    function createAudio() {
+      const BASE = "/dsh-theme-shelter/audio";
+      const FILES = { rain: "rain.mp3", snow: "rain.mp3", fire: "fire.mp3" };
+      const THUNDER = "thunder.mp3";
+      /* Per-intensity loudness. The mp3s are mastered hot, so these stay low. */
+      const LOUDNESS = [0, 0.18, 0.3, 0.42];
+
+      let loop = null;
+      let loopFile = "";
+      let target = 0.3;
+      let ramp = 0;
+      let enabled = false;
+      let thunderEl = null;
+      let thunderTimer = 0;
+
+      function element(file, looped) {
+        const el = new Audio(BASE + "/" + file);
+        el.loop = looped;
+        el.preload = "auto";
+        el.volume = 0;
+        return el;
+      }
+
+      function playSafe(el) {
+        if (!el) return;
+        const started = el.play();
+        /* A blocked autoplay must not surface as an unhandled rejection. */
+        if (started && typeof started.catch === "function") started.catch(() => {});
+      }
+
+      /** HTMLMediaElement.volume has no transition, so step it by hand. */
+      function fadeTo(el, next) {
+        if (!el) return;
+        if (ramp) window.clearInterval(ramp);
+        const from = el.volume;
+        const steps = 10;
+        let step = 0;
+        ramp = window.setInterval(() => {
+          step += 1;
+          el.volume = clamp(from + (next - from) * (step / steps), 0, 1);
+          if (step >= steps) {
+            window.clearInterval(ramp);
+            ramp = 0;
+          }
+        }, 50);
+      }
+
+      function stopLoop() {
+        const old = loop;
+        loop = null;
+        loopFile = "";
+        if (!old) return;
+        fadeTo(old, 0);
+        window.setTimeout(() => {
+          old.pause();
+          old.removeAttribute("src");
+          old.load();
+        }, 600);
+      }
+
+      return {
+        /** Point the ambience at a scene; the element survives an intensity change. */
+        play(scene, intensity) {
+          enabled = true;
+          const file = FILES[scene] || FILES.rain;
+          if (!loop || loopFile !== file) {
+            stopLoop();
+            loop = element(file, true);
+            loopFile = file;
+          }
+          /* mute() pauses after its fade, so re-enabling must start it again. */
+          if (loop.paused) playSafe(loop);
+          target = LOUDNESS[clamp(intensity, 0, 3)];
+          fadeTo(loop, target);
+        },
+        /** One thunder clap, delayed so it reads as a distant rumble. */
+        thunder() {
+          if (!enabled) return;
+          if (thunderTimer) window.clearTimeout(thunderTimer);
+          thunderTimer = window.setTimeout(() => {
+            thunderTimer = 0;
+            if (!enabled) return;
+            if (!thunderEl) thunderEl = element(THUNDER, false);
+            thunderEl.currentTime = 0;
+            thunderEl.volume = 0.75;
+            playSafe(thunderEl);
+          }, random(400, 2200));
+        },
+        mute() {
+          enabled = false;
+          if (thunderTimer) window.clearTimeout(thunderTimer);
+          thunderTimer = 0;
+          if (thunderEl) thunderEl.pause();
+          if (!loop) return;
+          fadeTo(loop, 0);
+          /* Stop decoding once the fade lands, unless sound came back meanwhile. */
+          window.setTimeout(() => {
+            if (!enabled && loop) loop.pause();
+          }, 700);
+        },
+        /** Called from a user gesture when sound was restored from settings. */
+        resume() {
+          if (!enabled || !loop) return;
+          if (loop.paused) playSafe(loop);
+          fadeTo(loop, target);
+        },
+        get ready() {
+          return loop !== null;
+        },
+        get state() {
+          if (!loop) return "none";
+          return loop.paused ? "suspended" : "running";
+        },
+      };
+    }
+
+    // -------------------------------------------------------------------- scenes
+
+    /** 0 — rain: fine drizzle. Short tapered streaks, small droplets, puddle rings. */
+    function createRainScene(sprites) {
+      const drops = [];
+      const beads = [];
+      const rings = [];
+      const splashes = [];
+      let width = 0;
+      let height = 0;
+      let schemeRef = "light";
+
+      function layer() {
+        const roll = Math.random();
+        if (roll < RAIN_LAYERS[0].share) return RAIN_LAYERS[0];
+        if (roll < RAIN_LAYERS[0].share + RAIN_LAYERS[1].share) return RAIN_LAYERS[1];
+        return RAIN_LAYERS[2];
+      }
+
+      function makeDrop(scheme, fromTop) {
+        const spec = layer();
+        /* Light glass needs a little more body than a dark one to read as water. */
+        const boost = scheme === "light" ? 1.35 : 1;
+        const alpha = Math.min(0.5, random(spec.alpha[0], spec.alpha[1]) * boost);
+        const length = random(spec.length[0], spec.length[1]) * random(0.7, 1.45);
+        return {
+          x: random(-0.08, 1.08) * width,
+          y: fromTop ? -length - random(0, height * 0.35) : random(0, height),
+          length,
+          speed: random(spec.speed[0], spec.speed[1]),
+          width: random(spec.width[0], spec.width[1]),
+          spread: random(0.75, 1.2),
+          alpha,
+          angle: random(-0.06, 0.06),
+        };
+      }
+
+      /** A droplet sitting on the glass: varied size, but it never moves or trails. */
+      function makeBead() {
+        const big = Math.random() < 0.14;
+        return {
+          x: random(0, width),
+          y: random(0, height * 0.96),
+          r: big ? random(2.2, 3.2) : random(0.9, 2.1),
+          alpha: random(0.25, 0.55),
+        };
+      }
+
+      function spawnRing(x) {
+        if (rings.length > 12) return;
+        const rgb = RAIN_RGB[schemeRef] || RAIN_RGB.light;
+        rings.push({
+          x,
+          y: height - 1,
+          r: random(0, 1),
+          target: random(4, 11),
+          color: rgba(rgb, random(0.05, 0.13)),
+        });
+      }
+
+      function splash(x) {
+        for (let index = 0; index < 2; index += 1) {
+          splashes.push({
+            x,
+            y: height,
+            vx: random(-45, 45),
+            vy: random(-120, -60),
+            life: 0.32,
+          });
+        }
+      }
+
+      return {
+        reset(state) {
+          width = state.w;
+          height = state.h;
+          schemeRef = state.scheme;
+          drops.length = 0;
+          beads.length = 0;
+          rings.length = 0;
+          splashes.length = 0;
+          const budget = clamp(Math.round((width * height) / 9000 * DENSITY[state.intensity]), 24, 460);
+          for (let index = 0; index < budget; index += 1) drops.push(makeDrop(state.scheme, false));
+          const beadCount = clamp(Math.round((width * height) / 42000), 12, 60);
+          for (let index = 0; index < beadCount; index += 1) beads.push(makeBead());
+        },
+
+        step(state, dt) {
+          width = state.w;
+          height = state.h;
+          schemeRef = state.scheme;
+          const wind = 0.16 + 0.05 * Math.sin(state.clock * 0.4);
+
+          for (let index = 0; index < drops.length; index += 1) {
+            const drop = drops[index];
+            drop.y += drop.speed * dt;
+            drop.x += drop.speed * dt * wind * 0.5;
+            if (drop.y - drop.length > height) {
+              if (Math.random() < 0.14) {
+                spawnRing(drop.x);
+                if (state.intensity >= 3) splash(drop.x);
+              }
+              drops[index] = makeDrop(state.scheme, true);
+            } else if (drop.x < -80 || drop.x > width + 80) {
+              drops[index] = makeDrop(state.scheme, true);
+            }
+          }
+
+          for (let index = rings.length - 1; index >= 0; index -= 1) {
+            const ring = rings[index];
+            ring.r += (ring.target - ring.r) * Math.min(1, dt * 3.4);
+            if (ring.r > ring.target - 0.6) rings.splice(index, 1);
+          }
+
+          for (let index = splashes.length - 1; index >= 0; index -= 1) {
+            const drop = splashes[index];
+            drop.life -= dt;
+            if (drop.life <= 0) {
+              splashes.splice(index, 1);
+              continue;
+            }
+            drop.vy += 900 * dt;
+            drop.x += drop.vx * dt;
+            drop.y += drop.vy * dt;
+          }
+        },
+
+        draw(g, state) {
+          const rgb = RAIN_RGB[state.scheme] || RAIN_RGB.light;
+          const beadSprite = state.scheme === "dark" ? sprites.beadDark : sprites.beadLight;
+
+          /* Short tapered streaks only: no head blob and no long tail. */
+          g.lineCap = "round";
+          const wind = 0.16 + 0.05 * Math.sin(state.clock * 0.4);
+          const bands = [
+            [0, 0.55, 0.18, 0.45],
+            [0.55, 0.82, 0.45, 0.7],
+            [0.82, 1, 0.95, 1],
+          ];
+          for (const drop of drops) {
+            if (drop.length < 3) continue;
+            const tail = drop.y - drop.length;
+            const drift = Math.tan(drop.angle + wind * 0.55) * drop.length;
+            const ax = drop.x - drift;
+            const w = drop.width * drop.spread;
+            for (const [from, to, alphaScale, widthScale] of bands) {
+              g.strokeStyle = rgba(rgb, Math.min(0.8, drop.alpha * alphaScale));
+              g.lineWidth = w * widthScale;
+              g.beginPath();
+              g.moveTo(ax + drift * from, tail + drop.length * from);
+              g.lineTo(ax + drift * to, tail + drop.length * to);
+              g.stroke();
+            }
+          }
+
+          /* Small droplets on the pane — texture only, no drifting and no trail. */
+          for (const bead of beads) {
+            const size = bead.r * 2.6;
+            g.globalAlpha = bead.alpha;
+            g.drawImage(beadSprite, bead.x - size / 2, bead.y - size / 2, size, size);
+          }
+          g.globalAlpha = 1;
+
+          for (const ring of rings) {
+            g.strokeStyle = ring.color;
+            g.lineWidth = 0.8;
+            g.beginPath();
+            g.ellipse(ring.x, ring.y, ring.r, ring.r * 0.3, 0, 0, Math.PI * 2);
+            g.stroke();
+          }
+
+          g.fillStyle = rgba(rgb, 0.45);
+          for (const drop of splashes) {
+            g.globalAlpha = clamp(drop.life / 0.32, 0, 1);
+            g.beginPath();
+            g.arc(drop.x, drop.y, 0.9, 0, Math.PI * 2);
+            g.fill();
+          }
+          g.globalAlpha = 1;
+        },
+      };
+    }
+
+    /** 1 — snow: drifting flakes with sway, glints, a soft bank at the bottom. */
+    function createSnowScene(sprites) {
+      const flakes = [];
+      const glints = [];
+      const bank = [];
+      let width = 0;
+      let height = 0;
+
+      function makeFlake(scheme, fromTop) {
+        const size = random(0.8, 3);
+        return {
+          x: random(0, width),
+          y: fromTop ? -10 : random(0, height),
+          r: size,
+          vy: random(16, 54) * (0.6 + size / 5),
+          sway: random(6, 26),
+          phase: random(0, Math.PI * 2),
+          alpha: random(0.35, 0.92),
+          twinkle: Math.random() < 0.15,
+        };
+      }
+
+      return {
+        reset(state) {
+          width = state.w;
+          height = state.h;
+          flakes.length = 0;
+          glints.length = 0;
+          bank.length = 0;
+          const budget = clamp(Math.round((width * height) / 11000 * DENSITY[state.intensity]), 30, 340);
+          for (let index = 0; index < budget; index += 1) flakes.push(makeFlake(state.scheme, false));
+          for (let x = 0; x <= width; x += 16) {
+            bank.push({ x, h: 3 + Math.sin(x * 0.03) * 2 + Math.random() * 2 });
+          }
+        },
+
+        step(state, dt) {
+          width = state.w;
+          height = state.h;
+          const wind = 0.4 + 0.3 * Math.sin(state.clock * 0.23);
+          for (let index = 0; index < flakes.length; index += 1) {
+            const flake = flakes[index];
+            flake.y += flake.vy * dt;
+            flake.x += Math.sin(state.clock * 0.9 + flake.phase) * flake.sway * dt + wind * 14 * dt;
+            if (flake.y - flake.r > height) {
+              flakes[index] = makeFlake(state.scheme, true);
+              continue;
+            }
+            if (flake.x < -12) flake.x = width + 10;
+            else if (flake.x > width + 12) flake.x = -10;
+          }
+
+          for (let index = glints.length - 1; index >= 0; index -= 1) {
+            glints[index].life -= dt;
+            if (glints[index].life <= 0) glints.splice(index, 1);
+          }
+          if (glints.length < 10 && Math.random() < 0.12) {
+            const flake = flakes[Math.floor(Math.random() * flakes.length)];
+            if (flake) glints.push({ x: flake.x, y: flake.y, r: random(3, 7), life: random(0.5, 1.4), max: 1.4 });
+          }
+        },
+
+        draw(g, state) {
+          const rgb = SNOW_RGB[state.scheme] || SNOW_RGB.light;
+          const sprite = state.scheme === "dark" ? sprites.flakeLight : sprites.flakeDark;
+
+          /* Accumulation bank: soft, low, and only once it is actually snowing. */
+          if (state.intensity >= 2) {
+            const rise = state.intensity === 3 ? 13 : 8;
+            const gradient = g.createLinearGradient(0, height - rise * 3, 0, height);
+            gradient.addColorStop(0, rgba(rgb, 0));
+            gradient.addColorStop(1, rgba(rgb, state.scheme === "dark" ? 0.16 : 0.2));
+            g.fillStyle = gradient;
+            g.beginPath();
+            g.moveTo(0, height);
+            for (const point of bank) g.lineTo(point.x, height - point.h);
+            g.lineTo(width, height);
+            g.closePath();
+            g.fill();
+          }
+
+          for (const flake of flakes) {
+            const size = flake.r * (flake.r > 2.4 ? 5.4 : 4.2);
+            g.globalAlpha = flake.alpha;
+            g.drawImage(sprite, flake.x - size / 2, flake.y - size / 2, size, size);
+            if (flake.r > 2.6) {
+              g.globalAlpha = flake.alpha * 0.32;
+              g.strokeStyle = rgba(rgb, 0.9);
+              g.lineWidth = 0.55;
+              g.beginPath();
+              for (let spoke = 0; spoke < 3; spoke += 1) {
+                const angle = (Math.PI / 3) * spoke;
+                g.moveTo(flake.x - Math.cos(angle) * flake.r * 1.3, flake.y - Math.sin(angle) * flake.r * 1.3);
+                g.lineTo(flake.x + Math.cos(angle) * flake.r * 1.3, flake.y + Math.sin(angle) * flake.r * 1.3);
+              }
+              g.stroke();
+            }
+          }
+          g.globalAlpha = 1;
+
+          for (const glint of glints) {
+            const fade = clamp(glint.life / glint.max, 0, 1);
+            g.strokeStyle = rgba(rgb, 0.75 * fade);
+            g.lineWidth = 0.8;
+            g.beginPath();
+            g.moveTo(glint.x - glint.r, glint.y);
+            g.lineTo(glint.x + glint.r, glint.y);
+            g.moveTo(glint.x, glint.y - glint.r);
+            g.lineTo(glint.x, glint.y + glint.r);
+            g.stroke();
+          }
+        },
+      };
+    }
+
+    /** 2 — fire: warm hearth glow, rising embers, sparks and slow smoke. */
+    function createFireScene(sprites) {
+      const embers = [];
+      const sparks = [];
+      const smoke = [];
+      let width = 0;
+      let height = 0;
+
+      function makeEmber(state, seeded) {
+        return {
+          x: width * 0.5 + random(-0.32, 0.32) * width,
+          y: seeded ? random(height * 0.15, height) : height + random(4, 40),
+          vy: random(30, 90) * (0.6 + state.intensity * 0.2),
+          vx: random(-16, 16),
+          r: random(0.9, 2.6),
+          phase: random(0, Math.PI * 2),
+          life: random(2.2, 5.5),
+          maxLife: 5.5,
+          hot: Math.random() < 0.25,
+        };
+      }
+
+      return {
+        reset(state) {
+          width = state.w;
+          height = state.h;
+          embers.length = 0;
+          sparks.length = 0;
+          smoke.length = 0;
+          const budget = clamp(Math.round(state.intensity * 22), 10, 64);
+          for (let index = 0; index < budget; index += 1) embers.push(makeEmber(state, true));
+          for (let index = 0; index < 4; index += 1) {
+            smoke.push({ x: width * 0.5 + random(-0.2, 0.2) * width, y: random(0.35, 1) * height, r: random(40, 110), rise: random(8, 22), alpha: random(0.02, 0.06) });
+          }
+        },
+
+        step(state, dt) {
+          width = state.w;
+          height = state.h;
+          for (let index = 0; index < embers.length; index += 1) {
+            const ember = embers[index];
+            ember.life -= dt;
+            ember.y -= ember.vy * dt;
+            ember.x += (ember.vx + Math.sin(state.clock * 2 + ember.phase) * 14) * dt;
+            if (ember.life <= 0 || ember.y < -20) embers[index] = makeEmber(state, false);
+          }
+
+          if (sparks.length < 12 && Math.random() < dt * 3 * state.intensity) {
+            sparks.push({
+              x: width * 0.5 + random(-0.28, 0.28) * width,
+              y: height - random(0, 30),
+              vx: random(-60, 60),
+              vy: random(-210, -90),
+              life: random(0.4, 1.1),
+              max: 1.1,
+            });
+          }
+          for (let index = sparks.length - 1; index >= 0; index -= 1) {
+            const spark = sparks[index];
+            spark.life -= dt;
+            if (spark.life <= 0) {
+              sparks.splice(index, 1);
+              continue;
+            }
+            spark.vy += 420 * dt;
+            spark.x += spark.vx * dt;
+            spark.y += spark.vy * dt;
+          }
+
+          for (const puff of smoke) {
+            puff.y -= puff.rise * dt;
+            puff.r += 12 * dt;
+            if (puff.y + puff.r < 0) {
+              puff.y = height + puff.r * 0.4;
+              puff.r = random(40, 110);
+              puff.x = width * 0.5 + random(-0.2, 0.2) * width;
+            }
+          }
+        },
+
+        draw(g, state) {
+          const pulse = 0.82 + 0.12 * Math.sin(state.clock * 3.1) + 0.06 * Math.sin(state.clock * 7.7 + 1.3);
+          const glow = g.createRadialGradient(width * 0.5, height + 40, 0, width * 0.5, height + 40, height * 0.78);
+          glow.addColorStop(0, rgba(FIRE_RGB, 0.32 * pulse));
+          glow.addColorStop(0.45, rgba(FIRE_RGB, 0.10 * pulse));
+          glow.addColorStop(1, rgba(FIRE_RGB, 0));
+          g.fillStyle = glow;
+          g.fillRect(0, 0, width, height);
+
+          g.globalCompositeOperation = "lighter";
+          for (const ember of embers) {
+            const life = clamp(ember.life / ember.maxLife, 0, 1);
+            const flicker = 0.65 + 0.35 * Math.sin(state.clock * 9 + ember.phase);
+            const size = ember.r * (ember.hot ? 9 : 7);
+            g.globalAlpha = clamp(life * flicker, 0, 1) * 0.9;
+            g.drawImage(ember.hot ? sprites.spark : sprites.ember, ember.x - size / 2, ember.y - size / 2, size, size);
+          }
+          for (const spark of sparks) {
+            const fade = clamp(spark.life / spark.max, 0, 1);
+            const size = 10 * fade + 3;
+            g.globalAlpha = fade;
+            g.drawImage(sprites.spark, spark.x - size / 2, spark.y - size / 2, size, size);
+          }
+          g.globalAlpha = 1;
+          g.globalCompositeOperation = "source-over";
+
+          for (const puff of smoke) {
+            const gradient = g.createRadialGradient(puff.x, puff.y, 0, puff.x, puff.y, puff.r);
+            gradient.addColorStop(0, "rgba(120, 120, 128, " + puff.alpha.toFixed(3) + ")");
+            gradient.addColorStop(1, "rgba(120, 120, 128, 0)");
+            g.fillStyle = gradient;
+            g.beginPath();
+            g.arc(puff.x, puff.y, puff.r, 0, Math.PI * 2);
+            g.fill();
+          }
+        },
+      };
+    }
+
+    // ------------------------------------------------------------------- engine
+
+    function createWeatherEngine(doc, hooks) {
+      const root = doc.createElement("div");
+      root.id = ROOT_ID;
+      root.setAttribute("aria-hidden", "true");
+
+      const mist = doc.createElement("div");
+      mist.className = "dshw-mist";
+      const canvas = doc.createElement("canvas");
+      const nightLayer = doc.createElement("div");
+      nightLayer.className = "dshw-night";
+      const flash = doc.createElement("div");
+      flash.className = "dshw-flash";
+      root.append(mist, canvas, nightLayer, flash);
+      doc.body.appendChild(root);
+
+      const g = canvas.getContext("2d", { alpha: true });
+      const sprites = {
+        beadLight: beadSprite([122, 152, 182]),
+        beadDark: beadSprite([214, 234, 252]),
+        flakeLight: glowSprite([236, 246, 255], 0.45),
+        flakeDark: glowSprite([120, 150, 184], 0.45),
+        ember: glowSprite([255, 160, 70], 0.35),
+        spark: glowSprite([255, 238, 200], 0.3),
+      };
+
+      const state = {
+        scene: "rain",
+        intensity: 2,
+        scheme: "light",
+        night: false,
+        w: 1,
+        h: 1,
+        dpr: 1,
+        clock: 0,
+      };
+
+      const scenes = {
+        rain: createRainScene(sprites),
+        snow: createSnowScene(sprites),
+        fire: createFireScene(sprites),
+      };
+
+      let current = null;
+      let running = false;
+      let frame = 0;
+      let lastTime = 0;
+      let flashTimer = 0;
+
+      function paintMist() {
+        let top;
+        if (state.scene === "snow") {
+          top = state.scheme === "dark" ? "rgba(150, 185, 220, 0.14)" : "rgba(226, 238, 250, 0.55)";
+        } else if (state.scene === "fire") {
+          top = state.scheme === "dark" ? "rgba(90, 70, 55, 0.12)" : "rgba(250, 226, 200, 0.30)";
+        } else {
+          top = state.scheme === "dark" ? "rgba(104, 152, 196, 0.14)" : "rgba(206, 228, 247, 0.35)";
+        }
+        root.style.setProperty("--dshw-mist-top", top);
+        /* One soft glow from the top only: a bottom glow plus a mid-stop made a
+           visible horizontal seam that read as standing water. */
+        mist.style.background = "radial-gradient(150% 78% at 50% -20%, var(--dshw-mist-top), transparent 74%)";
+      }
+
+      function resize() {
+        const width = Math.max(1, window.innerWidth || doc.documentElement.clientWidth || 1);
+        const height = Math.max(1, window.innerHeight || doc.documentElement.clientHeight || 1);
+        const dpr = clamp(window.devicePixelRatio || 1, 1, 2);
+        state.w = width;
+        state.h = height;
+        canvas.width = Math.round(width * dpr);
+        canvas.height = Math.round(height * dpr);
+        canvas.style.width = width + "px";
+        canvas.style.height = height + "px";
+        if (g) g.setTransform(dpr, 0, 0, dpr, 0, 0);
+        if (current) current.reset(state);
+      }
+
+      function renderOnce() {
+        if (!g || !current) return;
+        g.clearRect(0, 0, state.w, state.h);
+        current.draw(g, state);
+      }
+
+      function tick(now) {
+        if (!running) return;
+        const elapsed = lastTime === 0 ? 16 : Math.min(64, now - lastTime);
+        lastTime = now;
+        const dt = elapsed / 1000;
+        state.clock += dt;
+        if (current) {
+          current.step(state, dt, state.clock);
+          renderOnce();
+        }
+        frame = window.requestAnimationFrame(tick);
+      }
+
+      function start() {
+        if (running || !current) return;
+        if (prefersReducedMotion()) {
+          renderOnce();
+          return;
+        }
+        running = true;
+        lastTime = 0;
+        frame = window.requestAnimationFrame(tick);
+        scheduleFlash();
+      }
+
+      function stop() {
+        running = false;
+        if (frame) window.cancelAnimationFrame(frame);
+        frame = 0;
+        if (flashTimer) window.clearTimeout(flashTimer);
+        flashTimer = 0;
+        if (g) g.clearRect(0, 0, state.w, state.h);
+      }
+
+      function scheduleFlash() {
+        if (flashTimer) window.clearTimeout(flashTimer);
+        flashTimer = 0;
+        if (!running || state.scene !== "rain" || !state.lightning || prefersReducedMotion()) return;
+        flashTimer = window.setTimeout(() => {
+          flashTimer = 0;
+          if (!running || !state.lightning || state.scene !== "rain") return;
+          flash.dataset.flashing = "true";
+          hooks.thunder();
+          window.setTimeout(() => {
+            if (flash.dataset) delete flash.dataset.flashing;
+          }, 1100);
+          scheduleFlash();
+        }, random(7000, 22000));
+      }
+
+      const onResize = () => {
+        resize();
+        if (!running) start();
+      };
+      window.addEventListener("resize", onResize);
+
+      const onVisibility = () => {
+        if (doc.hidden) {
+          stop();
+          return;
+        }
+        if (state.intensity > 0) start();
+      };
+      doc.addEventListener("visibilitychange", onVisibility);
+
+      const motionQuery = typeof window.matchMedia === "function"
+        ? window.matchMedia("(prefers-reduced-motion: reduce)")
+        : null;
+      const onMotionChange = () => {
+        stop();
+        start();
+      };
+      if (motionQuery && typeof motionQuery.addEventListener === "function") {
+        motionQuery.addEventListener("change", onMotionChange);
+      }
+
+      resize();
+      paintMist();
+
+      return {
+        setScene(scene) {
+          const next = scene === "none" ? "none" : scene;
+          const target = next === "none" ? null : scenes[next];
+          /* Same scene again (a palette or night toggle calls this too): the
+             particles are already rebuilt, so do not throw them away. */
+          if (next === state.scene && target === current) return;
+          state.scene = next;
+          current = target;
+          paintMist();
+          if (!current) {
+            stop();
+            root.dataset.ready = "false";
+            return;
+          }
+          current.reset(state);
+          root.dataset.ready = "true";
+        },
+        setIntensity(intensity) {
+          const next = clamp(intensity, 0, 3);
+          const changed = next !== state.intensity;
+          state.intensity = next;
+          root.dataset.ready = next > 0 && current ? "true" : "false";
+          if (!current) return;
+          /* Unchanged intensity while the loop is already running: nothing to do. */
+          if (!changed && running) return;
+          current.reset(state);
+          stop();
+          if (next > 0) start();
+        },
+        setScheme(scheme) {
+          state.scheme = scheme;
+          paintMist();
+          if (!running) renderOnce();
+        },
+        setNight(on) {
+          state.night = !!on;
+          root.dataset.night = on ? "true" : "false";
+          paintMist();
+          scheduleFlash();
+          if (!running) renderOnce();
+        },
+        setLightning(on) {
+          state.lightning = !!on;
+          scheduleFlash();
+        },
+        dispose() {
+          stop();
+          window.removeEventListener("resize", onResize);
+          doc.removeEventListener("visibilitychange", onVisibility);
+          if (motionQuery && typeof motionQuery.removeEventListener === "function") {
+            motionQuery.removeEventListener("change", onMotionChange);
+          }
+          root.remove();
+        },
+      };
+    }
+
+    // --------------------------------------------------------------------- panel
+
+    const ICONS = {
+      rain: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M7 15.5a4 4 0 0 1-.4-8A5.5 5.5 0 0 1 17.4 8a3.8 3.8 0 0 1 .6 7.5"/><path d="M8 18.5 7 21M12 18.5 11 21M16 18.5 15 21"/></svg>',
+      snow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9"/><path d="M9.4 5.3 12 7.4l2.6-2.1M9.4 18.7 12 16.6l2.6 2.1"/></svg>',
+      fire: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M12 3.5c.4 3 2.4 4.3 3.5 6.2 1 1.7.8 3.3-.2 4.3.6-1.9-.6-3.4-1.8-4.2.3 2.4-.9 3.6-2 4.6-1.1 1-1.6 2.1-1.2 3.4-1.4-.7-2.3-2-2.3-3.6 0-2.6 2-4 3-5.6.7-1.1 1-2.4 1-5.1Z"/><path d="M9.2 18.6c-1-1-1.4-2.3-1-3.6"/></svg>',
+      none: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="7.5"/><path d="M7 17 17 7"/></svg>',
+    };
+
+    function createPanel(doc, controller) {
+      const fab = doc.createElement("button");
+      fab.id = FAB_ID;
+      fab.type = "button";
+      fab.setAttribute("aria-label", "檐下");
+      fab.setAttribute("aria-expanded", "false");
+      fab.innerHTML = ICONS.rain;
+
+      const panel = doc.createElement("div");
+      panel.id = PANEL_ID;
+      panel.setAttribute("role", "dialog");
+      panel.setAttribute("aria-label", "檐下");
+      panel.innerHTML = [
+        '<div class="dshw-head"><span class="dshw-title">檐下</span>',
+        '<button class="dshw-close" type="button" aria-label="关闭">×</button></div>',
+        '<div class="dshw-row"><span class="dshw-label">场景</span>',
+        '<span class="dshw-seg" data-group="scene"></span></div>',
+        '<div class="dshw-row"><span class="dshw-label">强度</span>',
+        '<span class="dshw-seg" data-group="intensity"></span></div>',
+        '<div class="dshw-toggles">',
+        '<button class="dshw-toggle" type="button" data-key="palette" aria-pressed="true">配色</button>',
+        '<button class="dshw-toggle" type="button" data-key="lightning" aria-pressed="false">闪电</button>',
+        '<button class="dshw-toggle" type="button" data-key="sound" aria-pressed="false">声音</button>',
+        '<button class="dshw-toggle" type="button" data-key="night" aria-pressed="false">夜间</button>',
+        "</div>",
+        '<div class="dshw-foot"><span class="dshw-hint">v' + VERSION + '</span>',
+        '<button class="dshw-reset" type="button">恢复默认</button></div>',
+      ].join("");
+
+      doc.body.append(fab, panel);
+
+      const groups = {
+        scene: panel.querySelector('[data-group="scene"]'),
+        intensity: panel.querySelector('[data-group="intensity"]'),
+      };
+      const sceneLabels = { rain: "雨", snow: "雪", fire: "火", none: "关" };
+      const intensityLabels = { 1: "轻", 2: "中", 3: "暴" };
+
+      for (const key of SCENES) {
+        const button = doc.createElement("button");
+        button.type = "button";
+        button.textContent = sceneLabels[key];
+        button.dataset.value = key;
+        button.addEventListener("click", () => controller.setScene(key));
+        groups.scene.append(button);
+      }
+      for (const level of [1, 2, 3]) {
+        const button = doc.createElement("button");
+        button.type = "button";
+        button.textContent = intensityLabels[level];
+        button.dataset.value = String(level);
+        button.addEventListener("click", () => controller.setIntensity(level));
+        groups.intensity.append(button);
+      }
+
+      panel.querySelectorAll("[data-key]").forEach((button) => {
+        button.addEventListener("click", () => controller.toggle(button.dataset.key));
+      });
+      panel.querySelector(".dshw-close").addEventListener("click", () => setOpen(false));
+      panel.querySelector(".dshw-reset").addEventListener("click", () => controller.reset());
+
+      let open = false;
+      function setOpen(next) {
+        open = next;
+        panel.dataset.open = next ? "true" : "false";
+        fab.setAttribute("aria-expanded", next ? "true" : "false");
+      }
+      fab.addEventListener("click", (event) => {
+        event.stopPropagation();
+        setOpen(!open);
+      });
+      const onDocumentClick = (event) => {
+        if (!open) return;
+        if (panel.contains(event.target) || fab.contains(event.target)) return;
+        setOpen(false);
+      };
+      const onDocumentKey = (event) => {
+        if (event.key === "Escape" && open) setOpen(false);
+      };
+      doc.addEventListener("click", onDocumentClick);
+      doc.addEventListener("keydown", onDocumentKey);
+
+      /** Fill indicator inside the panel: minutes worked, bar, and full state. */
+      function render(settings) {
+        fab.innerHTML = ICONS[settings.scene] || ICONS.rain;
+        fab.title = "檐下 · " + (settings.scene === "none" ? "关" : sceneLabels[settings.scene])
+          + " · v" + VERSION;
+        groups.scene.querySelectorAll("button").forEach((button) => {
+          button.classList.toggle("is-on", button.dataset.value === settings.scene);
+        });
+        groups.intensity.querySelectorAll("button").forEach((button) => {
+          button.classList.toggle("is-on", Number(button.dataset.value) === settings.intensity);
+          button.disabled = settings.scene === "none";
+        });
+        panel.querySelectorAll("[data-key]").forEach((button) => {
+          const key = button.dataset.key;
+          const on = key === "sound" || key === "lightning" || key === "night" || key === "palette"
+            ? !!settings[key]
+            : false;
+          button.setAttribute("aria-pressed", on ? "true" : "false");
+          if (key === "lightning" || key === "night") button.disabled = settings.scene === "none";
+        });
+      }
+
+      return {
+        render,
+        dispose() {
+          doc.removeEventListener("click", onDocumentClick);
+          doc.removeEventListener("keydown", onDocumentKey);
+          fab.remove();
+          panel.remove();
+        },
+      };
+    }
+
+    // --------------------------------------------------------------------- apply
+
+    function installStyle(doc) {
+      const existing = doc.querySelector('style[data-plugin-css="' + STYLE_KEY + '"]');
+      if (existing) return existing;
+      const style = doc.createElement("style");
+      style.dataset.plugin = PLUGIN;
+      style.dataset.pluginCss = STYLE_KEY;
+      style.textContent = STYLE_TEXT;
+      doc.head.appendChild(style);
+      return style;
+    }
+
+    /**
+     * Mount the weather theme.
+     * @param ctx the client cordis context; `ctx.theme` is required.
+     */
+    function apply(ctx) {
+      if (typeof document === "undefined" || typeof window === "undefined") return;
+      const doc = document;
+      const settings = readSettings();
+      const audio = createAudio();
+
+      ctx.effect(() => {
+        /* A reload can leave the previous mount behind (hot-swapped bundle, a
+           duplicate entry, a crashed teardown). Stale roots would stack their
+           veils, so every mount starts from a clean slate. */
+        for (const id of [ROOT_ID, FAB_ID, PANEL_ID]) {
+          for (const stale of doc.querySelectorAll("#" + id)) stale.remove();
+        }
+        const style = installStyle(doc);
+        const engine = createWeatherEngine(doc, { thunder: () => audio.thunder() });
+        const listeners = new Set();
+        let paletteDispose = null;
+        let paletteKey = null;
+        let mounted = true;
+
+        const readScheme = () => {
+          try {
+            return ctx.theme.getTheme().active.colorScheme;
+          } catch (error) {
+            return "light";
+          }
+        };
+
+        /** The palette night mode forces is dark, so the overlay must follow it. */
+        const effectiveScheme = () => (settings.night && settings.scene !== "none" ? "dark" : readScheme());
+
+        /* ----- night mode: force the dark palette, then tint it stormy ----- */
+
+        const assertDark = () => {
+          if (!settings.night || settings.scene === "none") return;
+          if (!doc.body.hasAttribute("data-ds-dark-theme")) doc.body.setAttribute("data-ds-dark-theme", "");
+          doc.documentElement.style.colorScheme = "dark";
+        };
+        const nightObserver = new MutationObserver(() => assertDark());
+        const startNightGuard = () => {
+          nightObserver.observe(doc.body, { attributes: true, attributeFilter: ["data-ds-dark-theme"] });
+        };
+        const stopNightGuard = () => nightObserver.disconnect();
+
+        const applyPalette = () => {
+          /* Disabled: drop the layer once, then clear the memo so re-enabling
+             always re-applies even if every token is unchanged. */
+          if (settings.scene === "none" || !settings.palette) {
+            if (paletteDispose) {
+              paletteDispose();
+              paletteDispose = null;
+            }
+            paletteKey = null;
+            return;
+          }
+          const base = settings.night ? NIGHT_TOKENS : TOKENS;
+          const extra = SCENE_TOKENS[settings.scene] || SCENE_TOKENS.rain;
+          const layer = { ...base, ...(settings.night ? nightify(extra) : extra) };
+          /* Pass both arms of every pair: overrideTokens composes them against
+             the active theme's own color scheme, so following a light/dark
+             switch needs no DOM observation. Flattening to the document
+             attribute used to make this layer fight the theme presenter —
+             which re-applies the preference attribute on every publish — and
+             that feedback loop froze the renderer before boot could finish.
+             The memo below also makes repeated calls a no-op. */
+          const key = (settings.night ? "night" : "day") + "|" + settings.scene + "|" + JSON.stringify(layer);
+          if (paletteKey === key) return;
+          if (paletteDispose) {
+            paletteDispose();
+            paletteDispose = null;
+          }
+          paletteKey = key;
+          paletteDispose = ctx.theme.overrideTokens(PLUGIN, layer);
+        };
+
+        const applyNight = () => {
+          const on = settings.night && settings.scene !== "none";
+          engine.setNight(on);
+          if (on) {
+            startNightGuard();
+            assertDark();
+          } else {
+            stopNightGuard();
+            const scheme = readScheme();
+            if (scheme === "dark") doc.body.setAttribute("data-ds-dark-theme", "");
+            else doc.body.removeAttribute("data-ds-dark-theme");
+            doc.documentElement.style.colorScheme = scheme;
+          }
+          engine.setScheme(effectiveScheme());
+        };
+
+        const notify = () => {
+          const snapshot = { ...settings };
+          for (const listener of listeners) listener(snapshot);
+        };
+
+        /** Autoplay is refused until the page has seen a user gesture. */
+        const hasActivation = () => {
+          const activation = navigator.userActivation;
+          return !activation || activation.hasBeenActive;
+        };
+
+        /* Audio restarts are expensive (the whole noise graph is rebuilt and
+           ramped back in), so only replay when one of its inputs changed. */
+        let audioKey = null;
+
+        const applyAll = () => {
+          /* applyNight owns the engine's scheme; calling setScheme here too only
+             repainted the mist twice. */
+          applyNight();
+          applyPalette();
+          /* setIntensity owns reset + start/stop, so setScene must not restart. */
+          engine.setScene(settings.scene);
+          engine.setIntensity(settings.scene === "none" ? 0 : settings.intensity);
+          engine.setLightning(settings.lightning);
+          const nextAudio = settings.sound && settings.scene !== "none"
+            ? settings.scene + "|" + settings.intensity
+            : "";
+          if (nextAudio !== audioKey) {
+            audioKey = nextAudio;
+            if (nextAudio === "") audio.mute();
+            else if (hasActivation()) audio.play(settings.scene, settings.intensity);
+          }
+          writeSettings(settings);
+          notify();
+        };
+
+        const onThemeChange = () => {
+          if (!mounted) return;
+          engine.setScheme(effectiveScheme());
+          assertDark();
+          /* The token layer carries both arms and the theme service composes it
+             against its own active scheme, so a scheme switch needs no re-apply
+             here — and must not re-enter applyPalette while it is publishing. */
+        };
+        ctx.on("theme/change", onThemeChange);
+
+        const controller = {
+          version: VERSION,
+          get settings() {
+            return { ...settings };
+          },
+          /** True once the ambience <audio> element exists. */
+          get audioReady() {
+            return audio.ready;
+          },
+          /** "running" once the ambience element is actually playing. */
+          get audioState() {
+            return audio.state;
+          },
+          tokens: TOKENS,
+          subscribe(listener) {
+            listeners.add(listener);
+            listener({ ...settings });
+            return () => listeners.delete(listener);
+          },
+          setScene(scene) {
+            if (!SCENES.includes(scene)) return;
+            settings.scene = scene;
+            applyAll();
+          },
+          setIntensity(intensity) {
+            settings.intensity = clamp(Number(intensity) || 2, 1, 3);
+            if (settings.scene === "none") settings.scene = "rain";
+            applyAll();
+          },
+          setLightning(on) {
+            settings.lightning = !!on;
+            applyAll();
+          },
+          setSound(on) {
+            settings.sound = !!on;
+            applyAll();
+          },
+          setNight(on) {
+            settings.night = !!on;
+            applyAll();
+          },
+          /** Master switch for the rainy palette; the animation keeps running. */
+          setPalette(on) {
+            settings.palette = !!on;
+            applyAll();
+          },
+          toggle(key) {
+            if (key === "lightning") controller.setLightning(!settings.lightning);
+            else if (key === "sound") controller.setSound(!settings.sound);
+            else if (key === "night") controller.setNight(!settings.night);
+            else if (key === "palette") controller.setPalette(!settings.palette);
+          },
+          reset() {
+            Object.assign(settings, DEFAULTS);
+            applyAll();
+          },
+        };
+
+        const panel = createPanel(doc, controller);
+        controller.subscribe((snapshot) => panel.render(snapshot));
+
+        /* Sound restored from settings cannot auto-play: unlock on first gesture. */
+        const unlock = () => {
+          audio.resume();
+          if (settings.sound) audio.play(settings.scene, settings.intensity);
+          doc.removeEventListener("pointerdown", unlock, true);
+          doc.removeEventListener("keydown", unlock, true);
+        };
+        doc.addEventListener("pointerdown", unlock, true);
+        doc.addEventListener("keydown", unlock, true);
+
+        applyAll();
+        window.__dshWeather = controller;
+        window.__dshRain = controller;
+
+        return () => {
+          mounted = false;
+          stopNightGuard();
+          /* Hand the palette back exactly as the appearance preference had it. */
+          const scheme = readScheme();
+          if (scheme === "dark") doc.body.setAttribute("data-ds-dark-theme", "");
+          else doc.body.removeAttribute("data-ds-dark-theme");
+          doc.documentElement.style.colorScheme = scheme;
+          doc.removeEventListener("pointerdown", unlock, true);
+          doc.removeEventListener("keydown", unlock, true);
+          audio.mute();
+          if (paletteDispose) paletteDispose();
+          paletteDispose = null;
+          panel.dispose();
+          engine.dispose();
+          if (style && style.parentNode) style.remove();
+          try {
+            delete window.__dshWeather;
+            delete window.__dshRain;
+          } catch (error) {
+            window.__dshWeather = undefined;
+            window.__dshRain = undefined;
+          }
+        };
+      }, "dsh-theme-shelter: weather overlay, palette and panel");
+    }
+
+    exports.name = PLUGIN;
+    exports.inject = ["theme"];
+    exports.apply = apply;
+    return module.exports;
+  }
+});

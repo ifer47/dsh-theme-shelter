@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+
+# Local scratch and tooling output
+.scratch/
+*.log
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

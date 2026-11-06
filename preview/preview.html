@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>dsh-theme-shelter · 檐下 preview</title>
+<style>
+  /* A miniature stand-in for the DSH shell. Every surface reads the same
+     --dsw-alias-* tokens the real shell reads, so the plugin's override layer
+     behaves exactly as it will inside the GUI. Defaults below are DSH's. */
+  body {
+    margin: 0;
+    height: 100vh;
+    font: 14px/1.55 -apple-system, "Segoe UI", "PingFang SC", sans-serif;
+    color: var(--dsw-alias-label-primary, #0f1115);
+    background: var(--dsw-alias-bg-base, #fff);
+    /* DSH defaults, light */
+    --dsw-alias-bg-base: #fff;
+    --dsw-alias-bg-layer-1: #fff;
+    --dsw-alias-bg-layer-2: #fff;
+    --dsw-alias-bg-layer-3: #fff;
+    --dsw-alias-bg-overlay: #e9ecf2;
+    --dsw-alias-bg-module-platform: #f5f6f7;
+    --dsw-specific-sidebar-fill: #f9fafb;
+    --dsw-specific-input-major: #fff;
+    --dsw-specific-bubble: #eef6ff;
+    --dsw-specific-bubble-highlight: #d9e9fa;
+    --dsw-alias-label-primary: #0f1115;
+    --dsw-alias-label-secondary: #61666b;
+    --dsw-alias-label-tertiary: #81858c;
+    --dsw-alias-label-caption: #adb2b8;
+    --dsw-alias-border-l1: #0000000a;
+    --dsw-alias-border-l2: #0000001a;
+    --dsw-alias-border-l3: #0000001f;
+    --dsw-alias-border-l4: #00000029;
+    --dsw-alias-brand-primary: #0f1115;
+    --dsw-alias-brand-text: #0f1115;
+    --dsw-alias-label-primary-foreground: #fff;
+    --dsw-alias-markdown-code-block: #f9fafb;
+    --dsw-alias-markdown-code-block-banner: #f9fafb;
+    --dsw-alias-markdown-inline-code: #f4f5f6;
+    --dsw-alias-interactive-bg-hover: #2631480f;
+    --dsw-alias-interactive-bg-active: #2631481a;
+    --dsw-alias-state-business-primary: #4176e6;
+    --dsw-alias-link: #4176e6;
+    --dsw-alias-menu-icon: #353638;
+    --dsw-alias-tooltip-bg: #2c2c2e;
+    --dsw-alias-settings-card-fill: #fff;
+    --dsw-alias-settings-card-stroke: #00000029;
+  }
+  body[data-ds-dark-theme] {
+    /* DSH defaults, dark */
+    --dsw-alias-bg-base: #151517;
+    --dsw-alias-bg-layer-1: #1b1b1c;
+    --dsw-alias-bg-layer-2: #232324;
+    --dsw-alias-bg-layer-3: #2c2c2e;
+    --dsw-alias-bg-overlay: #1b1b1c;
+    --dsw-alias-bg-module-platform: #1b1b1c;
+    --dsw-specific-sidebar-fill: #1b1b1c;
+    --dsw-specific-input-major: #232324;
+    --dsw-specific-bubble: #1c2b3a;
+    --dsw-specific-bubble-highlight: #24384a;
+    --dsw-alias-label-primary: #f9fafb;
+    --dsw-alias-label-secondary: #a6a9ad;
+    --dsw-alias-label-tertiary: #81858c;
+    --dsw-alias-label-caption: #61666b;
+    --dsw-alias-border-l1: #ffffff0f;
+    --dsw-alias-border-l2: #ffffff1f;
+    --dsw-alias-border-l3: #ffffff29;
+    --dsw-alias-border-l4: #ffffff3d;
+    --dsw-alias-brand-primary: #f9fafb;
+    --dsw-alias-brand-text: #f9fafb;
+    --dsw-alias-label-primary-foreground: #0f1115;
+    --dsw-alias-markdown-code-block: #1b1b1c;
+    --dsw-alias-markdown-code-block-banner: #1b1b1c;
+    --dsw-alias-markdown-inline-code: #232324;
+    --dsw-alias-interactive-bg-hover: #ffffff14;
+    --dsw-alias-interactive-bg-active: #ffffff1f;
+    --dsw-alias-state-business-primary: #7aaaff;
+    --dsw-alias-link: #7aaaff;
+    --dsw-alias-menu-icon: #a6a9ad;
+    --dsw-alias-tooltip-bg: #2c2c2e;
+    --dsw-alias-settings-card-fill: #1b1b1c;
+    --dsw-alias-settings-card-stroke: #ffffff1f;
+  }
+
+  .app { display: flex; height: 100vh; }
+  .sidebar {
+    width: 240px; flex: none; display: flex; flex-direction: column; gap: 2px;
+    padding: 14px 10px; background: var(--dsw-specific-sidebar-fill);
+    border-right: 1px solid var(--dsw-alias-border-l2);
+  }
+  .brand { display: flex; align-items: center; gap: 8px; padding: 2px 8px 14px; font-weight: 600; }
+  .brand .dot { width: 18px; height: 18px; border-radius: 6px; background: var(--dsw-alias-brand-primary); }
+  .nav {
+    display: flex; align-items: center; gap: 9px; padding: 7px 9px; border-radius: 8px;
+    color: var(--dsw-alias-label-secondary); font-size: 13px;
+  }
+  .nav.on { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); font-weight: 600; }
+  .nav.small { font-size: 12px; color: var(--dsw-alias-label-tertiary); }
+  .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 4px; }
+
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--dsw-alias-bg-base); }
+  .topbar {
+    height: 44px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 18px; border-bottom: 1px solid var(--dsw-alias-border-l1);
+    color: var(--dsw-alias-label-secondary); font-size: 12.5px;
+  }
+  .thread { flex: 1; overflow: auto; padding: 26px max(28px, 12vw) 8px; }
+  .msg { margin-bottom: 22px; max-width: 720px; }
+  .who { font-size: 11.5px; color: var(--dsw-alias-label-tertiary); margin-bottom: 6px; letter-spacing: .02em; }
+  .bubble {
+    display: inline-block; padding: 9px 13px; border-radius: 14px;
+    background: var(--dsw-specific-bubble); border: 1px solid var(--dsw-alias-border-l1);
+  }
+  .prose h3 { margin: 0 0 6px; font-size: 15px; }
+  .prose p { margin: 0 0 10px; color: var(--dsw-alias-label-secondary); }
+  pre {
+    margin: 10px 0 4px; padding: 12px 14px; border-radius: 12px; overflow: auto;
+    background: var(--dsw-alias-markdown-code-block); border: 1px solid var(--dsw-alias-border-l1);
+    font: 12px/1.6 ui-monospace, Menlo, Consolas, monospace; color: var(--dsw-alias-label-primary);
+  }
+  code.inline {
+    padding: 1px 5px; border-radius: 5px; background: var(--dsw-alias-markdown-inline-code);
+    font: 12px ui-monospace, Menlo, Consolas, monospace;
+  }
+  .composer {
+    margin: 0 max(28px, 12vw) 18px; padding: 12px 14px; border-radius: 16px;
+    background: var(--dsw-specific-input-major); border: 1px solid var(--dsw-alias-border-l2);
+    box-shadow: 0 10px 30px #00000014; color: var(--dsw-alias-label-tertiary);
+  }
+  .composer .row { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+  .chip {
+    font-size: 12px; padding: 4px 9px; border-radius: 999px;
+    border: 1px solid var(--dsw-alias-border-l2); color: var(--dsw-alias-label-secondary);
+  }
+  .send {
+    width: 30px; height: 30px; border-radius: 9px; background: var(--dsw-alias-brand-primary);
+    color: var(--dsw-alias-label-primary-foreground); display: grid; place-items: center; font-size: 14px;
+  }
+
+  .hud {
+    position: fixed; left: 12px; bottom: 12px; z-index: 2147480010;
+    display: flex; align-items: center; gap: 6px; padding: 6px 8px;
+    border-radius: 10px; background: var(--dsw-alias-bg-layer-3);
+    border: 1px solid var(--dsw-alias-border-l2); font-size: 11px;
+    color: var(--dsw-alias-label-secondary); font-family: ui-monospace, Consolas, monospace;
+  }
+  .hud button {
+    font: inherit; color: inherit; cursor: pointer; padding: 3px 7px; border-radius: 6px;
+    border: 1px solid var(--dsw-alias-border-l2); background: transparent;
+  }
+  .hud button[aria-pressed="true"] {
+    background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary);
+  }
+  .boot { color: var(--dsw-alias-label-tertiary); font-size: 11px; padding: 0 28px 10px; font-family: ui-monospace, Consolas, monospace; }
+</style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand"><span class="dot"></span>DeepSeek Harness</div>
+      <div class="nav on">＋ 新会话</div>
+      <div class="nav">▤ 会话记录</div>
+      <div class="nav">◫ 工作区</div>
+      <div class="nav">♧ 插件</div>
+      <div class="side-foot">
+        <div class="nav small">⚙ 设置</div>
+        <div class="nav small">☂ 檐下 · preview</div>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="topbar"><span>檐下 · dsh-theme-shelter</span><span>DeepSeek-V4</span></div>
+      <div class="thread">
+        <div class="msg">
+          <div class="who">你</div>
+          <div class="bubble">雨滴落在玻璃上，应该有一点水痕和涟漪吧？</div>
+        </div>
+        <div class="msg">
+          <div class="who">DeepSeek</div>
+          <div class="prose">
+            <h3>雨天不是灰，是冷</h3>
+            <p>雨丝是细的锥形笔触：尾巴淡、头部略亮，但没有大亮珠，也不会拖出长尾巴。玻璃上散着一层细小的水珠，
+               雨滴落到底边才炸开一小圈涟漪；只有暴雨档才会溅出几个小水点。</p>
+            <pre>weather.setScene("rain")   // rain · snow · fire · none
+weather.setIntensity(3)    // 1 轻 / 2 中 / 3 暴
+weather.setSound(true)     // 下雨 / 火焰 / 打雷（真实录音）
+weather.setNight(true)     // 夜间模式</pre>
+            <p>右下角那个半透明的小按钮是唯一的面板入口，不占地方；夜间模式会把整套配色压到深色，
+               再叠一层月光。<code class="inline">--dsw-alias-*</code> 令牌始终跟随浅色 / 深色。</p>
+          </div>
+        </div>
+        <div class="msg">
+          <div class="who">你</div>
+          <div class="bubble">下雪和生火也能切？</div>
+        </div>
+      </div>
+      <div class="composer">
+        <div>给 DeepSeek 发消息…</div>
+        <div class="row">
+          <span class="chip">☂ 檐下</span>
+          <span class="send">↑</span>
+        </div>
+      </div>
+      <div class="boot" id="boot">bundle: waiting…</div>
+    </main>
+  </div>
+
+  <div class="hud">
+    <span>mock ctx</span>
+    <button id="btn-light" aria-pressed="true">light</button>
+    <button id="btn-dark" aria-pressed="false">dark</button>
+    <button id="btn-toggle-panel">面板</button>
+  </div>
+
+<script>
+  /* --- A stand-in for the shell's module kernel: capture the factory. --- */
+  window.__ModuleLoader__ = {
+    load({ id, factory }) {
+      window.__captured = { id, factory };
+    },
+  };
+</script>
+<script src="../client/client.js"></script>
+<script>
+  const boot = document.getElementById('boot');
+  const captured = window.__captured;
+  if (!captured) {
+    boot.textContent = 'bundle: NOT REGISTERED';
+  } else {
+    let mod;
+    try {
+      /* Materialize the bundle exactly like the real loader: a factory that may
+         `require` shared modules, returning the plugin's exports. */
+      mod = captured.factory((name) => {
+        throw new Error('unexpected require: ' + name);
+      });
+    } catch (error) {
+      boot.textContent = 'bundle: FACTORY THREW — ' + error.message;
+      throw error;
+    }
+
+    /* --- The smallest faithful `ctx`: theme snapshots + effect + on. --- */
+    const listeners = new Set();
+    let scheme = 'light';
+    let currentPairs = null;
+    let applied = [];
+
+    function clearTokens() {
+      for (const name of applied) document.body.style.removeProperty(name);
+      applied = [];
+    }
+
+    /* Mirrors the layout presenter: it re-writes the active snapshot's tokens
+       whenever the scheme or the layer changes. */
+    function renderTokens() {
+      clearTokens();
+      if (!currentPairs) return;
+      for (const [name, value] of Object.entries(currentPairs)) {
+        document.body.style.setProperty(name, value[scheme]);
+        applied.push(name);
+      }
+    }
+
+    const theme = {
+      getTheme() {
+        return { preference: scheme, active: { id: scheme, colorScheme: scheme, tokens: {} } };
+      },
+      overrideTokens(source, pairs) {
+        currentPairs = pairs;
+        renderTokens();
+        const mine = pairs;
+        return () => {
+          if (currentPairs === mine) {
+            currentPairs = null;
+            clearTokens();
+          }
+        };
+      },
+      setTheme(next) { setScheme(next); },
+    };
+
+    const ctx = {
+      theme,
+      effect(fn) { return fn(); },
+      on(name, handler) { listeners.add(handler); return () => listeners.delete(handler); },
+    };
+
+    function setScheme(next) {
+      scheme = next;
+      /* Night mode owns the attribute itself; its observer restores it. */
+      document.body.toggleAttribute('data-ds-dark-theme', next === 'dark');
+      renderTokens();
+      for (const handler of listeners) handler(theme.getTheme());
+      document.getElementById('btn-light').setAttribute('aria-pressed', String(next === 'light'));
+      document.getElementById('btn-dark').setAttribute('aria-pressed', String(next === 'dark'));
+      updateBoot();
+    }
+
+    function updateBoot() {
+      const weather = window.__dshWeather;
+      const settings = weather ? weather.settings : null;
+      boot.textContent = 'bundle: ' + captured.id
+        + ' · exports: ' + Object.keys(mod).join(', ')
+        + (settings ? ' · scene: ' + settings.scene + ' · intensity: ' + settings.intensity
+          + ' · night: ' + settings.night + ' · sound: ' + settings.sound : '')
+        + ' · scheme: ' + scheme;
+    }
+
+    window.__setScheme = setScheme;
+    window.__updateBoot = updateBoot;
+
+    mod.name = mod.name || captured.id;
+    mod.apply(ctx);
+
+    if (window.__dshWeather) {
+      window.__dshWeather.subscribe(() => updateBoot());
+    }
+
+    document.getElementById('btn-light').onclick = () => setScheme('light');
+    document.getElementById('btn-dark').onclick = () => setScheme('dark');
+    document.getElementById('btn-toggle-panel').onclick = () => {
+      document.getElementById('dsh-weather-fab').click();
+    };
+
+    updateBoot();
+  }
+</script>
+</body>
+</html>
