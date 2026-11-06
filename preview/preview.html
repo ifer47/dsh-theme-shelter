@@ -6,7 +6,8 @@
 <style>
   /* A miniature stand-in for the DSH shell. Every surface reads the same
      --dsw-alias-* tokens the real shell reads, so the plugin's override layer
-     behaves exactly as it will inside the GUI. Defaults below are DSH's. */
+     behaves exactly as it will inside the GUI. Defaults below are DSH's.
+     Tooling chrome (scheme switches, boot line) only appears at #debug. */
   body {
     margin: 0;
     height: 100vh;
@@ -85,26 +86,57 @@
 
   .app { display: flex; height: 100vh; }
   .sidebar {
-    width: 240px; flex: none; display: flex; flex-direction: column; gap: 2px;
-    padding: 14px 10px; background: var(--dsw-specific-sidebar-fill);
+    width: 232px; flex: none; display: flex; flex-direction: column;
+    padding: 14px 10px 10px; background: var(--dsw-specific-sidebar-fill);
     border-right: 1px solid var(--dsw-alias-border-l2);
   }
-  .brand { display: flex; align-items: center; gap: 8px; padding: 2px 8px 14px; font-weight: 600; }
+  .brand { display: flex; align-items: center; gap: 8px; padding: 2px 8px 14px; font-weight: 600; letter-spacing: .01em; }
   .brand .dot { width: 18px; height: 18px; border-radius: 6px; background: var(--dsw-alias-brand-primary); }
+  .new-session {
+    display: flex; align-items: center; justify-content: center; gap: 6px; height: 36px;
+    margin: 0 2px 10px; border-radius: 10px; font-size: 13.5px; font-weight: 500;
+    background: var(--dsw-alias-bg-layer-1); border: .5px solid var(--dsw-alias-border-l3);
+    color: var(--dsw-alias-label-primary);
+  }
   .nav {
     display: flex; align-items: center; gap: 9px; padding: 7px 9px; border-radius: 8px;
-    color: var(--dsw-alias-label-secondary); font-size: 13px;
+    color: var(--dsw-alias-label-primary); font-size: 13px;
   }
-  .nav.on { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); font-weight: 600; }
-  .nav.small { font-size: 12px; color: var(--dsw-alias-label-tertiary); }
-  .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 4px; }
+  .nav .glyph { width: 16px; color: var(--dsw-alias-label-secondary); display: inline-flex; justify-content: center; }
+  .nav.on { background: var(--dsw-alias-interactive-bg-active); font-weight: 600; }
+  .group-title {
+    margin: 14px 9px 4px; font-size: 11.5px; letter-spacing: .02em;
+    color: var(--dsw-alias-label-tertiary);
+  }
+  .session {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 6px 9px; border-radius: 7px; font-size: 12.5px;
+    color: var(--dsw-alias-label-primary);
+  }
+  .session.on { background: var(--dsw-alias-interactive-bg-active); }
+  .session .age { color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+  .side-foot { margin-top: auto; }
+  .side-foot .nav { font-size: 12.5px; color: var(--dsw-alias-label-secondary); }
 
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--dsw-alias-bg-base); }
   .topbar {
-    height: 44px; display: flex; align-items: center; justify-content: space-between;
-    padding: 0 18px; border-bottom: 1px solid var(--dsw-alias-border-l1);
-    color: var(--dsw-alias-label-secondary); font-size: 12.5px;
+    height: 46px; display: flex; align-items: center; gap: 10px; padding: 0 20px;
+    border-bottom: 1px solid var(--dsw-alias-border-l1); font-size: 13px;
   }
+  .topbar .title { font-weight: 500; }
+  .topbar .mode {
+    font-size: 11.5px; color: var(--dsw-alias-label-tertiary); padding: 2px 8px;
+    border-radius: 999px; border: 1px solid var(--dsw-alias-border-l2);
+  }
+  .topbar .spacer { flex: 1; }
+  .topbar .model { color: var(--dsw-alias-label-tertiary); font-size: 12px; }
+  .tabs {
+    display: flex; gap: 16px; padding: 0 20px; height: 34px; align-items: center;
+    border-bottom: 1px solid var(--dsw-alias-border-l1);
+    color: var(--dsw-alias-label-tertiary); font-size: 12.5px;
+  }
+  .tabs .on { color: var(--dsw-alias-label-primary); font-weight: 500; box-shadow: inset 0 -1.5px 0 var(--dsw-alias-label-primary); }
+
   .thread { flex: 1; overflow: auto; padding: 26px max(28px, 12vw) 8px; }
   .msg { margin-bottom: 22px; max-width: 720px; }
   .who { font-size: 11.5px; color: var(--dsw-alias-label-tertiary); margin-bottom: 6px; letter-spacing: .02em; }
@@ -126,50 +158,62 @@
   .composer {
     margin: 0 max(28px, 12vw) 18px; padding: 12px 14px; border-radius: 16px;
     background: var(--dsw-specific-input-major); border: 1px solid var(--dsw-alias-border-l2);
-    box-shadow: 0 10px 30px #00000014; color: var(--dsw-alias-label-tertiary);
+    box-shadow: 0 10px 30px #00000012; color: var(--dsw-alias-label-tertiary);
   }
-  .composer .row { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
-  .chip {
-    font-size: 12px; padding: 4px 9px; border-radius: 999px;
-    border: 1px solid var(--dsw-alias-border-l2); color: var(--dsw-alias-label-secondary);
+  .composer .row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .composer .plus {
+    width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+    border: 1px solid var(--dsw-alias-border-l2); color: var(--dsw-alias-label-secondary); font-size: 15px;
   }
-  .send {
+  .composer .spacer { flex: 1; }
+  .composer .send {
     width: 30px; height: 30px; border-radius: 9px; background: var(--dsw-alias-brand-primary);
     color: var(--dsw-alias-label-primary-foreground); display: grid; place-items: center; font-size: 14px;
   }
 
-  .hud {
-    position: fixed; left: 12px; bottom: 12px; z-index: 2147480010;
-    display: flex; align-items: center; gap: 6px; padding: 6px 8px;
-    border-radius: 10px; background: var(--dsw-alias-bg-layer-3);
-    border: 1px solid var(--dsw-alias-border-l2); font-size: 11px;
-    color: var(--dsw-alias-label-secondary); font-family: ui-monospace, Consolas, monospace;
+  /* Tooling only: hidden unless the page is opened as #debug. */
+  .hud, .boot { display: none; }
+  body[data-debug="true"] .hud {
+    display: flex; position: fixed; left: 12px; bottom: 12px; z-index: 2147480010;
+    align-items: center; gap: 6px; padding: 6px 8px; border-radius: 10px;
+    background: var(--dsw-alias-bg-layer-3); border: 1px solid var(--dsw-alias-border-l2);
+    font: 11px/1 ui-monospace, Consolas, monospace; color: var(--dsw-alias-label-secondary);
   }
-  .hud button {
-    font: inherit; color: inherit; cursor: pointer; padding: 3px 7px; border-radius: 6px;
+  body[data-debug="true"] .hud button {
+    font: inherit; color: inherit; cursor: pointer; padding: 4px 7px; border-radius: 6px;
     border: 1px solid var(--dsw-alias-border-l2); background: transparent;
   }
-  .hud button[aria-pressed="true"] {
+  body[data-debug="true"] .hud button[aria-pressed="true"] {
     background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary);
   }
-  .boot { color: var(--dsw-alias-label-tertiary); font-size: 11px; padding: 0 28px 10px; font-family: ui-monospace, Consolas, monospace; }
+  body[data-debug="true"] .boot {
+    display: block; padding: 0 28px 10px; font: 11px/1.5 ui-monospace, Consolas, monospace;
+    color: var(--dsw-alias-label-tertiary);
+  }
 </style>
 </head>
 <body>
   <div class="app">
     <aside class="sidebar">
       <div class="brand"><span class="dot"></span>DeepSeek Harness</div>
-      <div class="nav on">＋ 新会话</div>
-      <div class="nav">▤ 会话记录</div>
-      <div class="nav">◫ 工作区</div>
-      <div class="nav">♧ 插件</div>
-      <div class="side-foot">
-        <div class="nav small">⚙ 设置</div>
-        <div class="nav small">☂ 檐下 · preview</div>
-      </div>
+      <div class="new-session">＋ 新会话</div>
+      <div class="nav"><span class="glyph">♧</span>插件</div>
+      <div class="nav"><span class="glyph">▦</span>插件市场</div>
+      <div class="nav"><span class="glyph">◷</span>自动化任务</div>
+      <div class="nav"><span class="glyph">⋯</span>更多</div>
+      <div class="group-title">工作区</div>
+      <div class="session on"><span>檐下 · 天气主题</span><span class="age">刚刚</span></div>
+      <div class="session"><span>默认工作区</span><span class="age">2 小时</span></div>
+      <div class="side-foot"><div class="nav"><span class="glyph">⚙</span>设置</div></div>
     </aside>
     <main class="main">
-      <div class="topbar"><span>檐下 · dsh-theme-shelter</span><span>DeepSeek-V4</span></div>
+      <div class="topbar">
+        <span class="title">檐下 · 天气主题</span>
+        <span class="mode">标准模式</span>
+        <span class="spacer"></span>
+        <span class="model">DeepSeek-V4</span>
+      </div>
+      <div class="tabs"><span class="on">对话</span><span>轨迹</span></div>
       <div class="thread">
         <div class="msg">
           <div class="who">你</div>
@@ -197,7 +241,8 @@ weather.setNight(true)     // 夜间模式</pre>
       <div class="composer">
         <div>给 DeepSeek 发消息…</div>
         <div class="row">
-          <span class="chip">☂ 檐下</span>
+          <span class="plus">＋</span>
+          <span class="spacer"></span>
           <span class="send">↑</span>
         </div>
       </div>
@@ -213,6 +258,9 @@ weather.setNight(true)     // 夜间模式</pre>
   </div>
 
 <script>
+  const debug = location.hash === '#debug';
+  if (debug) document.body.dataset.debug = 'true';
+
   /* --- A stand-in for the shell's module kernel: capture the factory. --- */
   window.__ModuleLoader__ = {
     load({ id, factory }) {
@@ -287,7 +335,6 @@ weather.setNight(true)     // 夜间模式</pre>
 
     function setScheme(next) {
       scheme = next;
-      /* Night mode owns the attribute itself; its observer restores it. */
       document.body.toggleAttribute('data-ds-dark-theme', next === 'dark');
       renderTokens();
       for (const handler of listeners) handler(theme.getTheme());
