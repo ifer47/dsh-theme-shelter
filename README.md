@@ -24,7 +24,7 @@
   <img src="docs/night-fire.jpg" width="264" alt="Hearth at night" />
 </p>
 
-**Contents:** [Scenes](#scenes) · [Install](#install) · [Usage](#usage) · [Audio](#audio) · [How it works](#how-it-works) · [Development](#development) · [Credits](#credits)
+**Contents:** [Scenes](#scenes) · [Install](#install) · [Usage](#usage) · [Audio](#audio) · [How it works](#how-it-works) · [Development](#development) · [Release](#release) · [Credits](#credits)
 
 ## What it is
 
@@ -116,6 +116,24 @@ Snow has no recording, because real snowfall is nearly silent: it is a looped br
 `preview/preview.html` is a standalone harness: it fakes the module loader and `ctx.theme`, so you can open it directly to see all three scenes, night mode and the panel.
 
 The profile links this package with `link:`, so editing `client/client.js` only needs a DSH restart.
+
+## Release
+
+Three things have to agree: the git tag, `package.json`, and npm. The market reads the GitHub entry and maps it to the npm package by its `repository` field — when the tag and the npm version drift apart, users are told an update exists and then install the old code.
+
+1. **Bump the version in two places** — `version` in `package.json` **and** `const VERSION` in `client/client.js` (the panel footer shows that one). Changing only one leaves the panel reporting the previous release.
+2. **Commit, tag, push:**
+   ```powershell
+   git commit -am "chore: release 0.3.1"
+   git tag -a v0.3.1 -m "0.3.1"
+   git push --follow-tags
+   ```
+3. **Publish to npm.** `publishConfig` already points at the origin registry, so no `--registry` is needed even when the machine-level `.npmrc` uses a China mirror:
+   ```powershell
+   npm publish
+   ```
+
+Nothing else to upload by hand: the `tarball:` in the market entry points at a GitHub Release asset and only covers installs that cannot reach npm.
 
 ## Known limitations
 

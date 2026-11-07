@@ -24,7 +24,7 @@
   <img src="docs/night-fire.jpg" width="264" alt="夜间 · 炉火" />
 </p>
 
-**目录：** [三种场景](#三种场景) · [安装](#安装) · [使用](#使用) · [声音](#声音) · [工作原理](#工作原理) · [本地开发](#本地开发) · [素材来源](#素材来源)
+**目录：** [三种场景](#三种场景) · [安装](#安装) · [使用](#使用) · [声音](#声音) · [工作原理](#工作原理) · [本地开发](#本地开发) · [发布](#发布) · [素材来源](#素材来源)
 
 ## 它是什么
 
@@ -116,6 +116,24 @@ __dshWeather.reset()
 `preview/preview.html` 是一个不依赖 DSH 的预览壳：伪造模块加载器和 `ctx.theme`，双击即可看三种场景、夜间与面板。
 
 profile 里是 `link:` 依赖，改完 `client/client.js` 只需重启 DSH。
+
+## 发布
+
+三样东西必须对齐：git tag、`package.json`、npm。市场读的是 GitHub 上的条目，再靠 `repository` 字段把 npm 包映射过来——tag 和 npm 版本一旦漂移，用户会被提示“有新版本”，装到的却是旧代码。
+
+1. **两个地方一起改版本号** —— `package.json` 的 `version` **和** `client/client.js` 里的 `const VERSION`（面板页脚显示的是后者）。只改一处，面板会一直报上一个版本。
+2. **提交、打 tag、推送：**
+   ```powershell
+   git commit -am "chore: release 0.3.1"
+   git tag -a v0.3.1 -m "0.3.1"
+   git push --follow-tags
+   ```
+3. **发到 npm。** `publishConfig` 已经把发布目标钉在官方源，所以即使机器级的 `.npmrc` 用的是国内镜像，也不需要加 `--registry`：
+   ```powershell
+   npm publish
+   ```
+
+条目里的 `tarball:` 指向 GitHub Release 上的预构建包，那是独立的一条兜底路径，只在 npm 不可达时才用得上——平时不需要手动上传。
 
 ## 已知限制
 
