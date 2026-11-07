@@ -84,7 +84,7 @@ Click the small button in the bottom-right corner:
 
 Settings live in `localStorage["dsh-theme-shelter/v2"]` and survive reloads.
 
-**First run.** On a fresh install a small bubble appears above that button — “点这里切换天气” — and disappears for good once you click it, open the panel, or after twelve seconds. If you miss it, the button is always in the bottom-right corner: 28 px, with a cloud, umbrella, snowflake or flame depending on the scene.
+**First run.** On a fresh install a small bubble appears above that button — “点这里切换天气”. It never takes a click itself: any click or keypress anywhere dismisses it, and so does twelve seconds passing. If you miss it, the button is always in the bottom-right corner: 28 px, with a cloud, umbrella, snowflake or flame depending on the scene.
 
 Console API:
 

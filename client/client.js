@@ -16,7 +16,7 @@ window.__ModuleLoader__.load({
     Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 
     const PLUGIN = "dsh-theme-shelter";
-    const VERSION = "0.3.0";
+    const VERSION = "0.3.1";
     const STORE_KEY = "dsh-theme-shelter/v2";
     const ROOT_ID = "dsh-weather-root";
     const STYLE_KEY = PLUGIN + "/weather.css";
@@ -246,10 +246,15 @@ window.__ModuleLoader__.load({
   border: 1px solid var(--dsw-alias-border-l3, #ffffff29);
   box-shadow: 0 8px 24px #00000038;
   font: 11.5px/1.55 -apple-system, "Segoe UI", "PingFang SC", sans-serif;
-  cursor: pointer; opacity: 0; transform: translateY(4px);
-  transition: opacity .18s ease, transform .18s ease;
+  cursor: default; opacity: 0; transform: translateY(4px);
+  /* hidden means gone: a transparent but hit-testable box here would eat the
+     clicks meant for the composer send / pause button underneath it */
+  pointer-events: none; visibility: hidden;
+  transition: opacity .18s ease, transform .18s ease, visibility .18s;
 }
-#${HINT_ID}[data-show="true"] { opacity: 1; transform: none; }
+#${HINT_ID}[data-show="true"] {
+  opacity: 1; transform: none; visibility: visible;
+}
 #${HINT_ID} i {
   position: absolute; right: 11px; bottom: -5px; width: 8px; height: 8px;
   background: inherit; transform: rotate(45deg);
@@ -1893,6 +1898,9 @@ body[data-ds-dark-theme] #${PANEL_ID} {
         if (hintShow) { window.clearTimeout(hintShow); hintShow = 0; }
         if (hintHide) { window.clearTimeout(hintHide); hintHide = 0; }
         hint.dataset.show = "false";
+        /* out of the layout, not merely transparent: the composer sits
+           directly underneath this corner of the window */
+        hint.hidden = true;
         if (persist) controller.dismissHint();
       }
       function syncHint(current) {
@@ -1903,15 +1911,17 @@ body[data-ds-dark-theme] #${PANEL_ID} {
         if (hintShow || hint.dataset.show === "true") return;
         hintShow = window.setTimeout(() => {
           hintShow = 0;
+          hint.hidden = false;
           hint.dataset.show = "true";
           hintHide = window.setTimeout(() => dismissHint(true), 12000);
         }, 1600);
       }
-      hint.addEventListener("click", (event) => {
-        event.stopPropagation();
-        dismissHint(true);
-        setOpen(true);
-      });
+      /* Any click or keypress means the nudge did its job. It listens on the
+         document instead of on itself so it can never intercept the click
+         headed for the composer button underneath. */
+      const onAnyInteraction = () => dismissHint(true);
+      doc.addEventListener("click", onAnyInteraction, true);
+      doc.addEventListener("keydown", onAnyInteraction, true);
 
       const onDocumentClick = (event) => {
         if (!open) return;
@@ -1952,6 +1962,9 @@ body[data-ds-dark-theme] #${PANEL_ID} {
         dispose() {
           doc.removeEventListener("click", onDocumentClick);
           doc.removeEventListener("keydown", onDocumentKey);
+          doc.removeEventListener("click", onAnyInteraction, true);
+          doc.removeEventListener("keydown", onAnyInteraction, true);
+          hint.remove();
           fab.remove();
           panel.remove();
         },
