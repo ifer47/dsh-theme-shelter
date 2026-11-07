@@ -53,6 +53,8 @@ pnpm add "C:\path\to\dsh-theme-shelter"
 
 Then append `dsh-theme-shelter` to `dsh.profile.bundles` in the profile `package.json`, and reload the window (<kbd>Ctrl</kbd>+<kbd>R</kbd>) or restart DSH.
 
+It is also on npm as [`dsh-theme-shelter`](https://www.npmjs.com/package/dsh-theme-shelter): `npm i dsh-theme-shelter` installs the same bundle, and the plugin market installs it from there.
+
 Manual alternative — add to `~/.dsh/profiles/desktop/cordis.patch.yml`:
 
 ```yaml

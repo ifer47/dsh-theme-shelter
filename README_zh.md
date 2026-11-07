@@ -53,6 +53,8 @@ pnpm add "C:\path\to\dsh-theme-shelter"
 
 再把它加到 profile `package.json` 的 `dsh.profile.bundles` 末尾，然后刷新窗口（<kbd>Ctrl</kbd>+<kbd>R</kbd>）或重启 DSH。
 
+它也发布在 npm 上：[`dsh-theme-shelter`](https://www.npmjs.com/package/dsh-theme-shelter)。`npm i dsh-theme-shelter` 装的是同一个包，插件市场也会优先从 npm 安装。
+
 也可以手动挂载——在 `~/.dsh/profiles/desktop/cordis.patch.yml` 末尾追加：
 
 ```yaml
