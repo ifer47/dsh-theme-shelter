@@ -55,6 +55,8 @@ pnpm add "C:\path\to\dsh-theme-shelter"
 
 它也发布在 npm 上：[`dsh-theme-shelter`](https://www.npmjs.com/package/dsh-theme-shelter)。`npm i dsh-theme-shelter` 装的是同一个包，插件市场也会优先从 npm 安装。
 
+npm 12 起默认不允许从远程 tarball 或 git 地址安装（安装时安全默认值）：装远程 tarball 加 `--allow-remote`，git 依赖加 `--allow-git`。本包没有任何安装脚本，其余不受影响。
+
 也可以手动挂载——在 `~/.dsh/profiles/desktop/cordis.patch.yml` 末尾追加：
 
 ```yaml

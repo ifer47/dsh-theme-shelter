@@ -55,6 +55,8 @@ Then append `dsh-theme-shelter` to `dsh.profile.bundles` in the profile `package
 
 It is also on npm as [`dsh-theme-shelter`](https://www.npmjs.com/package/dsh-theme-shelter): `npm i dsh-theme-shelter` installs the same bundle, and the plugin market installs it from there.
 
+On npm 12+ a tarball or git URL is refused by default (install-time security defaults) — add `--allow-remote` for a remote tarball, or `--allow-git` for a git dependency. This package ships no install scripts, so nothing else is affected.
+
 Manual alternative — add to `~/.dsh/profiles/desktop/cordis.patch.yml`:
 
 ```yaml
