@@ -29,6 +29,10 @@
   "bugs": {
     "url": "https://github.com/ifer47/dsh-theme-shelter/issues"
   },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
