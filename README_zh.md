@@ -8,6 +8,8 @@
 
 <p>
   <a href="https://github.com/ifer47/dsh-theme-shelter/releases"><img src="https://img.shields.io/github/v/tag/ifer47/dsh-theme-shelter?label=version&color=blue" alt="Version" /></a>
+  <a href="https://www.npmjs.com/package/dsh-theme-shelter"><img src="https://img.shields.io/npm/v/dsh-theme-shelter?label=npm&color=cb3837" alt="npm" /></a>
+  <a href="https://www.npmjs.com/package/dsh-theme-shelter"><img src="https://img.shields.io/npm/dm/dsh-theme-shelter?label=%E4%B8%8B%E8%BD%BD&color=cb3837" alt="npm 下载量" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License" /></a>
   <a href="https://github.com/ifer47/dsh-theme-shelter/stargazers"><img src="https://img.shields.io/github/stars/ifer47/dsh-theme-shelter?style=social" alt="Stars" /></a>
   <img src="https://img.shields.io/badge/platform-Web%20%2B%20Desktop-6b7280" alt="Platform" />
@@ -136,6 +138,8 @@ profile 里是 `link:` 依赖，改完 `client/client.js` 只需重启 DSH。
    ```
 
 条目里的 `tarball:` 指向 GitHub Release 上的预构建包，那是独立的一条兜底路径，只在 npm 不可达时才用得上——平时不需要手动上传。
+
+**npm 是唯一的发布源。** GitHub 仓库右侧的 Packages 面板会一直是空的：那里只列 GitHub Packages 上的包，而本包没有往 `npm.pkg.github.com` 发布。要填满它就只能加 scope 另发一份 `@ifer47/dsh-theme-shelter`，同一份代码多出一个包名，只会让用户多问一句"到底装哪个"。装 npm 上的 `dsh-theme-shelter`，或者直接从插件市场装即可。
 
 ## 已知限制
 

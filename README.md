@@ -8,6 +8,8 @@
 
 <p>
   <a href="https://github.com/ifer47/dsh-theme-shelter/releases"><img src="https://img.shields.io/github/v/tag/ifer47/dsh-theme-shelter?label=version&color=blue" alt="Version" /></a>
+  <a href="https://www.npmjs.com/package/dsh-theme-shelter"><img src="https://img.shields.io/npm/v/dsh-theme-shelter?label=npm&color=cb3837" alt="npm" /></a>
+  <a href="https://www.npmjs.com/package/dsh-theme-shelter"><img src="https://img.shields.io/npm/dm/dsh-theme-shelter?label=downloads&color=cb3837" alt="npm downloads" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License" /></a>
   <a href="https://github.com/ifer47/dsh-theme-shelter/stargazers"><img src="https://img.shields.io/github/stars/ifer47/dsh-theme-shelter?style=social" alt="Stars" /></a>
   <img src="https://img.shields.io/badge/platform-Web%20%2B%20Desktop-6b7280" alt="Platform" />
@@ -136,6 +138,8 @@ Three things have to agree: the git tag, `package.json`, and npm. The market rea
    ```
 
 Nothing else to upload by hand: the `tarball:` in the market entry points at a GitHub Release asset and only covers installs that cannot reach npm.
+
+**npm is the only registry.** The Packages panel on GitHub stays empty on purpose — it lists GitHub Packages only, and nothing here is published to `npm.pkg.github.com`. A mirror would have to be scoped (`@ifer47/dsh-theme-shelter`), which is a second package name for the same code and only adds "which one do I install" confusion. Install from npm, or from the plugin market.
 
 ## Known limitations
 
