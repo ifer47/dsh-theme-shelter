@@ -184,8 +184,8 @@ Three things have to agree: the git tag, `package.json`, and npm. The market rea
 1. **Bump the version in two places** — `version` in `package.json` **and** `const VERSION` in `client/client.js` (the panel footer shows that one). Changing only one leaves the panel reporting the previous release.
 2. **Commit, tag, push:**
    ```powershell
-   git commit -am "chore: release 0.7.1"
-   git tag -a v0.7.1 -m "0.7.1"
+   git commit -am "chore: release 0.7.2"
+   git tag -a v0.7.2 -m "0.7.2"
    git push --follow-tags
    ```
 3. **Publish to npm.** `publishConfig` already points at the origin registry, so no `--registry` is needed even when the machine-level `.npmrc` uses a China mirror:
