@@ -16,15 +16,25 @@ window.__ModuleLoader__.load({
     Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 
     const PLUGIN = "dsh-theme-shelter";
-    const VERSION = "0.3.1";
+    const VERSION = "0.7.1";
     const STORE_KEY = "dsh-theme-shelter/v2";
     const ROOT_ID = "dsh-weather-root";
+    const WALLPAPER_ID = "dsh-wallpaper";
     const STYLE_KEY = PLUGIN + "/weather.css";
     const FAB_ID = "dsh-weather-fab";
     const HINT_ID = "dsh-weather-hint";
     const PANEL_ID = "dsh-weather-panel";
 
-    /** Settings shape and defaults: rain at medium strength, no audio. */
+    /**
+     * The host half serves `audio/` and `wallpapers/` from one route. The
+     * preview harness has no server, so it overrides the root with a relative
+     * path before the bundle is materialized.
+     */
+    const ASSET_BASE = typeof window.__dshShelterBase === "string" && window.__dshShelterBase
+      ? window.__dshShelterBase
+      : "/dsh-theme-shelter/";
+
+    /** Settings shape and defaults: rain at medium strength, the painted default wallpaper. */
     const DEFAULTS = Object.freeze({
       scene: "rain",
       intensity: 2,
@@ -32,12 +42,152 @@ window.__ModuleLoader__.load({
       sound: false,
       night: false,
       palette: true,
+      /* none · a preset id · custom · u:<file from ~/.dsh/wallpapers> */
+      wallpaper: "jinxi",
+      /* framing of whichever wallpaper is chosen: full · left · right */
+      wallCrop: "full",
+      /* colour grade: none · cool · warm · ink */
+      wallTone: "none",
+      /* how much the glass panes hide the wallpaper: 1 淡 / 2 中 / 3 浓 */
+      wallDepth: 2,
+      /* frosted glass: softer to read, and it hides image detail on purpose */
+      wallBlur: false,
       /* set once the first-run nudge has been shown and dismissed */
       hintSeen: false,
     });
 
     const SCENES = ["rain", "snow", "fire", "none"];
     const DENSITY = [0, 0.55, 1, 1.75];
+
+    /**
+     * The bundled wallpapers, in panel order. `id` is also the asset slug:
+     * `wallpapers/<id>.webp` and `wallpapers/<id>-thumb.webp`. `label` names
+     * what is actually in the picture; `title` keeps the source file name.
+     *
+     * The first four are the hero paintings, the next eighteen are the story
+     * series supplied for this plugin, and the last three are painted by
+     * `tools/make-wallpapers.py`. Framing and grading are separate controls,
+     * so any of them can be re-cropped or recoloured without new assets.
+     */
+    const WALLPAPERS = [
+      { id: "jinxi", label: "月崖", title: "今昔是何年" },
+      { id: "tower", label: "望楼", title: "庇护所" },
+      { id: "homeward", label: "归途", title: "雪天山洞荒山老人" },
+      { id: "village", label: "村雪", title: "古风冬雪树屋" },
+
+      { id: "morning-1", label: "晨寨", title: "深山山寨的晨曲" },
+      { id: "morning-2", label: "炊烟", title: "深山山寨的晨曲 (1)" },
+      { id: "refuge", label: "雪阶", title: "避难所故事创作" },
+      { id: "storm", label: "火塘", title: "恶劣天气下的庇护所" },
+      { id: "short-1", label: "夜渡", title: "庇护所动画短剧" },
+      { id: "short-2", label: "泊岸", title: "庇护所动画短剧 (1)" },
+      { id: "hidden", label: "洞宴", title: "家族隐居深山躲避追杀" },
+      { id: "utopia-1", label: "桃源", title: "桃花源记动画创作与播放" },
+      { id: "utopia-2", label: "花溪", title: "桃花源记动画创作与播放 (1)" },
+      { id: "homestead-1", label: "崖居", title: "山上人家的故事" },
+      { id: "homestead-2", label: "雪径", title: "山上人家的故事 (1)" },
+      { id: "tale-1", label: "围炉", title: "庇护所动画故事" },
+      { id: "tale-2", label: "洞楼", title: "庇护所动画故事创作" },
+      { id: "tale-3", label: "洞天", title: "庇护所动画故事生成" },
+      { id: "tale-4", label: "水帘", title: "庇护所动画故事生成 (1)" },
+      { id: "tale-5", label: "暖潭", title: "庇护所动画故事生成 (2)" },
+      { id: "melon", label: "藤居", title: "西瓜地瓜棚温馨治愈场景" },
+      { id: "yard", label: "夏院", title: "傍晚小院的西瓜时光" },
+
+      { id: "forest", label: "夜林", title: "夜林 · 程序化绘制" },
+      { id: "rain", label: "檐雨", title: "檐雨 · 程序化绘制" },
+      { id: "aurora", label: "极光", title: "极光 · 程序化绘制" },
+    ];
+
+    const WALLPAPER_NONE = "none";
+    const WALLPAPER_CUSTOM = "custom";
+
+    /**
+     * Framing: the middle crops in, the sides zoom to that edge. The origins
+     * sit just outside the frame so the blur bleed never exposes an edge.
+     */
+    const WALL_CROPS = {
+      full: { label: "全", origin: "50% 50%", zoom: 1 },
+      left: { label: "左", origin: "-8% 50%", zoom: 1.5 },
+      right: { label: "右", origin: "108% 50%", zoom: 1.5 },
+    };
+
+    /** Colour grades, applied on top of the crop and the blur. */
+    const WALL_TONES = {
+      none: { label: "原", filter: "" },
+      cool: { label: "冷", filter: "saturate(.72) hue-rotate(-8deg) brightness(1.06)" },
+      warm: { label: "暖", filter: "saturate(1.14) sepia(.2) brightness(1.04)" },
+      ink: { label: "墨", filter: "grayscale(.9) contrast(1.1) brightness(.96)" },
+    };
+
+    /** Frost radius for 柔化; the layer carries an extra zoom to hide the bleed. */
+    const BLUR_PX = 20;
+
+    /**
+     * Surface tokens that may lose their opacity when a wallpaper is behind
+     * them, split by how much of the image they should let through. Text,
+     * borders, interaction tints and illustration details stay fully opaque:
+     * they carry legibility, not material.
+     *
+     * The page sheet (`--dsw-alias-bg-base`) is handled apart from these: the
+     * shell paints it on `body`, the frame and the tab host at once, so any
+     * alpha above zero multiplies down to a muddy smear. It goes fully
+     * transparent when a wallpaper is active and the veil owns contrast.
+     */
+    const GLASS_GROUPS = {
+      page: new Set([
+        "--dsw-alias-bg-overlay",
+        "--dsw-alias-bg-module-platform",
+        "--dsw-alias-bg-multi-select",
+        "--dsw-specific-sidebar-fill",
+      ]),
+      panel: new Set([
+        "--dsw-alias-bg-layer-1",
+        "--dsw-alias-bg-layer-2",
+        "--dsw-alias-bg-layer-3",
+        "--dsw-specific-input-major",
+        "--dsw-specific-login-input",
+        "--dsw-specific-selector",
+        "--dsw-specific-tip",
+        "--dsw-alias-settings-card-fill",
+      ]),
+      content: new Set([
+        "--dsw-specific-bubble",
+        "--dsw-specific-bubble-highlight",
+        "--dsw-alias-menu-group-header-fill",
+        "--dsw-alias-markdown-code-block",
+        "--dsw-alias-markdown-code-block-banner",
+        "--dsw-alias-markdown-inline-code",
+        "--dsw-alias-markdown-tag",
+        "--dsw-alias-markdown-citation",
+        "--dsw-alias-markdown-placeholder",
+      ]),
+    };
+
+    /** The page sheet itself: see the note above. */
+    const PAGE_SHEET = "--dsw-alias-bg-base";
+
+    /**
+     * Glass opacity per group, per scheme, per depth. Panels (cards, menus,
+     * the composer) stay nearly solid so text never reads through them.
+     */
+    const GLASS_ALPHA = {
+      page: { light: [0, 0.3, 0.44, 0.58], dark: [0, 0.26, 0.38, 0.5] },
+      panel: { light: [0, 0.72, 0.84, 0.92], dark: [0, 0.62, 0.74, 0.84] },
+      content: { light: [0, 0.66, 0.78, 0.88], dark: [0, 0.56, 0.68, 0.8] },
+    };
+
+    /**
+     * The tint between the painting and the chrome. With the page sheet
+     * transparent this is the whole contrast budget, so it carries the depth
+     * setting: 淡 shows more picture, 浓 is calmer to read.
+     */
+    const GLASS_VEIL = {
+      /* light text is dark, so a light scheme needs a stronger wash to keep
+         body copy above ~4.5:1 on the bright parts of a painting */
+      light: [0, 0.34, 0.46, 0.58],
+      dark: [0, 0.14, 0.24, 0.34],
+    };
 
     /**
      * Token override layer: one `{ light, dark }` pair per alias token, folded
@@ -168,6 +318,97 @@ window.__ModuleLoader__.load({
       return out;
     }
 
+    /**
+     * A wallpaper id is either a keyword, a built-in preset, or one file from
+     * the user's wallpaper folder. Anything else is dropped on read, so a
+     * hand-edited localStorage entry cannot send the client chasing a path.
+     * @param value a candidate wallpaper id.
+     * @returns whether the id names something the client can render.
+     */
+    function isWallpaperId(value) {
+      if (typeof value !== "string") return false;
+      if (value === WALLPAPER_NONE || value === WALLPAPER_CUSTOM) return true;
+      if (WALLPAPERS.some((preset) => preset.id === value)) return true;
+      return /^u:[^\\/:*?"<>|\u0000-\u001f]{1,180}$/.test(value);
+    }
+
+    /** Own-property membership, so stored junk cannot reach Object.prototype. */
+    function hasOwn(map, key) {
+      return typeof key === "string" && Object.prototype.hasOwnProperty.call(map, key);
+    }
+
+    function wallpaperPreset(id) {
+      if (id === WALLPAPER_NONE || id === WALLPAPER_CUSTOM || typeof id !== "string") return null;
+      if (id.startsWith("u:")) return { id, name: id.slice(2) };
+      return WALLPAPERS.find((preset) => preset.id === id) || null;
+    }
+
+    /** #rgb / #rrggbb / #rrggbbaa → channels; null when the value is not that shape. */
+    function parseHexColor(value) {
+      const match = /^#([0-9a-f]{3,8})$/i.exec(String(value).trim());
+      if (!match) return null;
+      let hex = match[1];
+      if (hex.length === 3) hex = hex.split("").map((digit) => digit + digit).join("");
+      if (hex.length !== 6 && hex.length !== 8) return null;
+      return {
+        r: parseInt(hex.slice(0, 2), 16),
+        g: parseInt(hex.slice(2, 4), 16),
+        b: parseInt(hex.slice(4, 6), 16),
+        a: hex.length === 8 ? parseInt(hex.slice(6, 8), 16) / 255 : 1,
+      };
+    }
+
+    function hexChannel(value) {
+      return clamp(Math.round(value), 0, 255).toString(16).padStart(2, "0");
+    }
+
+    /** Keep a token's hue, replace its opacity. */
+    function withAlpha(value, alpha) {
+      const color = parseHexColor(value);
+      if (!color) return value;
+      return "#" + hexChannel(color.r) + hexChannel(color.g) + hexChannel(color.b)
+        + hexChannel(alpha * 255);
+    }
+
+    /**
+     * Turn opaque surfaces into glass. Each arm keeps its own opacity, so a
+     * light/dark switch needs no re-apply: the theme service composes the pair
+     * against its own scheme. Tokens that already carry transparency (menus,
+     * skeleton fills) are left alone — they were designed to show through.
+     * @param layer the palette pairs to transform.
+     * @param depth 1 淡 / 2 中 / 3 浓.
+     * @returns a copy with glass surfaces.
+     */
+    function glassify(layer, depth) {
+      const out = {};
+      for (const [name, pair] of Object.entries(layer)) {
+        /* The page sheet is painted by body, the frame and the tab host at
+           once; any alpha left on it compounds into mud, so it goes clear. */
+        if (name === PAGE_SHEET) {
+          out[name] = { light: withAlpha(pair.light, 0), dark: withAlpha(pair.dark, 0) };
+          continue;
+        }
+        let group = null;
+        for (const [key, names] of Object.entries(GLASS_GROUPS)) {
+          if (names.has(name)) {
+            group = key;
+            break;
+          }
+        }
+        if (!group) {
+          out[name] = pair;
+          continue;
+        }
+        const next = { ...pair };
+        const light = parseHexColor(next.light);
+        if (light && light.a >= 0.999) next.light = withAlpha(next.light, GLASS_ALPHA[group].light[depth]);
+        const dark = parseHexColor(next.dark);
+        if (dark && dark.a >= 0.999) next.dark = withAlpha(next.dark, GLASS_ALPHA[group].dark[depth]);
+        out[name] = next;
+      }
+      return out;
+    }
+
     const STYLE_TEXT = `
 #${ROOT_ID} {
   position: fixed;
@@ -182,6 +423,9 @@ window.__ModuleLoader__.load({
 #${ROOT_ID}[data-ready="true"] { opacity: 1; }
 #${ROOT_ID} > canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 #${ROOT_ID} > .dshw-mist { position: absolute; inset: -12%; transition: opacity 600ms ease; }
+/* A wallpaper already supplies the haze; the weather mist sits above the UI,
+   so leaving it on would wash out text that now reads directly on the image. */
+#${ROOT_ID}[data-backdrop="true"] > .dshw-mist { opacity: 0; }
 #${ROOT_ID} > .dshw-night {
   position: absolute;
   inset: 0;
@@ -210,6 +454,38 @@ window.__ModuleLoader__.load({
   27% { opacity: 0.08; }
   45% { opacity: 0; }
   100% { opacity: 0; }
+}
+
+/* The wallpaper is the page's own bottom layer: below every surface, above
+   the canvas. The shell's page sheet is made fully transparent while a
+   wallpaper is active — body, frame and tab host all paint that one token —
+   so the painting shows at full strength and the veil above it owns contrast. */
+#${WALLPAPER_ID} {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+  /* the palette base, replaced at runtime; it masks the window backdrop while
+     an image is still decoding */
+  background-color: #0c141d;
+}
+#${WALLPAPER_ID}[data-on="false"] { display: none; }
+#${WALLPAPER_ID} > .dshw-wall {
+  position: absolute;
+  inset: 0;
+  background-position: 50% 50%;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transition: opacity 800ms ease;
+  transform-origin: 50% 50%;
+}
+#${WALLPAPER_ID} > .dshw-wall.is-on { opacity: 1; }
+#${WALLPAPER_ID} > .dshw-wall-tint {
+  position: absolute;
+  inset: 0;
+  transition: background 600ms ease;
 }
 
 #${FAB_ID} {
@@ -241,7 +517,12 @@ window.__ModuleLoader__.load({
 #${HINT_ID} {
   position: fixed; right: 15px; bottom: 54px; z-index: 2147483000;
   max-width: 200px; padding: 7px 10px 7px 11px; border-radius: 9px;
-  background: var(--dsw-alias-bg-module-platform, #e8eef5);
+  /* two stacked translucent surfaces: when a wallpaper makes the tokens
+     see-through, a one-layer bubble would let the transcript read through it */
+  background:
+    linear-gradient(var(--dsw-alias-bg-module-platform, #e8eef5), var(--dsw-alias-bg-module-platform, #e8eef5)),
+    linear-gradient(var(--dsw-alias-bg-module-platform, #e8eef5), var(--dsw-alias-bg-module-platform, #e8eef5)),
+    var(--dsw-alias-bg-base, #fff);
   color: var(--dsw-alias-label-primary, #f9fafb);
   border: 1px solid var(--dsw-alias-border-l3, #ffffff29);
   box-shadow: 0 8px 24px #00000038;
@@ -271,11 +552,21 @@ window.__ModuleLoader__.load({
   padding: 10px 12px 11px;
   border-radius: 14px;
   color: var(--dsw-alias-label-primary, #0f1115);
-  background: var(--dsw-alias-bg-layer-3, #fff);
+  /* layer-3 stacked twice over the page sheet: a dialog has to stay readable
+     even when the glass tokens below it are translucent, and ghost text from
+     the transcript showing through a popover reads as a rendering bug */
+  background:
+    linear-gradient(var(--dsw-alias-bg-layer-3, #fff), var(--dsw-alias-bg-layer-3, #fff)),
+    linear-gradient(var(--dsw-alias-bg-layer-3, #fff), var(--dsw-alias-bg-layer-3, #fff)),
+    var(--dsw-alias-bg-base, #fff);
   border: 1px solid var(--dsw-alias-border-l2, #0000001a);
   box-shadow: 0 18px 44px #0000002e;
   font: 12px/1.5 -apple-system, "Segoe UI", "PingFang SC", sans-serif;
   display: none;
+  /* a user folder full of wallpapers must not push the panel off-screen */
+  max-height: calc(100vh - 78px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 #${PANEL_ID}[data-open="true"] { display: block; }
 /* Segmented surfaces are not the theme's own tokens: in dark the rain palette
@@ -311,7 +602,7 @@ body[data-ds-dark-theme] #${PANEL_ID} {
 }
 #${PANEL_ID} .dshw-seg button:disabled { opacity: .4; cursor: default; }
 #${PANEL_ID} .dshw-toggles {
-  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px;
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px;
   margin-top: 9px; padding: 2px; border-radius: 8px;
   background: var(--dshw-tray);
 }
@@ -326,6 +617,69 @@ body[data-ds-dark-theme] #${PANEL_ID} {
   box-shadow: 0 0 0 0.5px var(--dshw-pill-stroke);
 }
 #${PANEL_ID} .dshw-toggle:disabled { opacity: .4; cursor: default; }
+
+/* Wallpaper picker: three columns of 64×40 thumbnails, so six choices (none,
+   four presets, custom) fill exactly two rows. */
+#${PANEL_ID} .dshw-wall-head { margin-top: 10px; }
+#${PANEL_ID} .dshw-wall-name {
+  color: var(--dsw-alias-label-tertiary, #66788b); font-size: 10.5px;
+  max-width: 132px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#${PANEL_ID} .dshw-walls {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; margin-top: 5px;
+  /* 25+ wallpapers: the strip keeps three rows and scrolls instead of pushing
+     the rest of the panel off the screen */
+  max-height: 148px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  padding-right: 2px;
+}
+#${PANEL_ID} .dshw-walls::-webkit-scrollbar { width: 6px; }
+#${PANEL_ID} .dshw-walls::-webkit-scrollbar-thumb {
+  background: var(--dshw-pill-stroke); border-radius: 3px;
+}
+#${PANEL_ID} .dshw-wall-tile {
+  position: relative; height: 44px; padding: 0; border: 0; border-radius: 7px;
+  cursor: pointer; overflow: hidden; display: block;
+  background-color: var(--dshw-tray);
+  background-position: 50% 50%; background-size: cover; background-repeat: no-repeat;
+  box-shadow: inset 0 0 0 1px var(--dshw-pill-stroke);
+  transition: box-shadow 140ms ease, transform 140ms ease;
+}
+#${PANEL_ID} .dshw-wall-tile:hover { transform: translateY(-1px); }
+#${PANEL_ID} .dshw-wall-tile:focus-visible { outline: 1.5px solid var(--dsw-alias-label-primary, #0f1115); outline-offset: 1px; }
+#${PANEL_ID} .dshw-wall-art {
+  position: absolute; inset: 0; display: block;
+  background-position: 50% 50%; background-size: cover; background-repeat: no-repeat;
+}
+#${PANEL_ID} .dshw-wall-glyph {
+  position: relative; display: grid; place-items: center; width: 100%; height: 100%;
+  font-size: 15px; line-height: 1;
+}
+#${PANEL_ID} .dshw-wall-tile.is-on {
+  outline: 1.5px solid var(--dsw-alias-label-primary, #0f1115);
+  outline-offset: 1px;
+}
+#${PANEL_ID} .dshw-wall-tile[data-kind="none"],
+#${PANEL_ID} .dshw-wall-tile[data-kind="custom"][data-empty="true"] {
+  display: grid; place-items: center; color: var(--dsw-alias-label-secondary, #4a5a6b);
+  background-image: repeating-linear-gradient(135deg, var(--dshw-pill-stroke) 0 1px, transparent 1px 7px);
+}
+#${PANEL_ID} .dshw-wall-tile svg { width: 15px; height: 15px; display: block; }
+#${PANEL_ID} .dshw-wall-tile .dshw-wall-plus { font-size: 15px; line-height: 1; }
+#${PANEL_ID} .dshw-wall-tile .dshw-wall-clear {
+  position: absolute; top: 2px; right: 2px; width: 14px; height: 14px; padding: 0;
+  display: none; place-items: center; border: 0; border-radius: 50%;
+  background: #000000b8; color: #fff; font: 10px/1 -apple-system, "Segoe UI", sans-serif;
+  cursor: pointer;
+}
+#${PANEL_ID} .dshw-wall-tile.is-on .dshw-wall-clear { display: grid; }
+#${PANEL_ID} .dshw-wall-status {
+  display: none; margin-top: 5px; color: var(--dsw-alias-label-tertiary, #66788b); font-size: 10.5px;
+}
+#${PANEL_ID} .dshw-wall-status[data-show="true"] { display: block; }
+#${PANEL_ID}[data-drop="true"] { outline: 2px dashed var(--dsw-alias-label-tertiary, #66788b); outline-offset: -6px; }
 #${PANEL_ID} .dshw-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
 #${PANEL_ID} .dshw-hint { color: var(--dsw-alias-label-tertiary, #66788b); font-size: 10.5px; }
 #${PANEL_ID} .dshw-reset {
@@ -338,6 +692,7 @@ body[data-ds-dark-theme] #${PANEL_ID} {
   #${ROOT_ID} { transition: none; }
   #${ROOT_ID} > .dshw-flash[data-flashing="true"] { animation: none; }
   #${FAB_ID} { transition: none; }
+  #${WALLPAPER_ID}, #${WALLPAPER_ID} > .dshw-wall, #${WALLPAPER_ID} > .dshw-wall-tint { transition: none; }
 }
 `;
 
@@ -352,6 +707,11 @@ body[data-ds-dark-theme] #${PANEL_ID} {
       if (typeof value.sound === "boolean") out.sound = value.sound;
       if (typeof value.night === "boolean") out.night = value.night;
       if (typeof value.palette === "boolean") out.palette = value.palette;
+      if (isWallpaperId(value.wallpaper)) out.wallpaper = value.wallpaper;
+      if (hasOwn(WALL_CROPS, value.wallCrop)) out.wallCrop = value.wallCrop;
+      if (hasOwn(WALL_TONES, value.wallTone)) out.wallTone = value.wallTone;
+      if (value.wallDepth === 1 || value.wallDepth === 2 || value.wallDepth === 3) out.wallDepth = value.wallDepth;
+      if (typeof value.wallBlur === "boolean") out.wallBlur = value.wallBlur;
       if (typeof value.hintSeen === "boolean") out.hintSeen = value.hintSeen;
       return out;
     }
@@ -545,7 +905,7 @@ body[data-ds-dark-theme] #${PANEL_ID} {
      * their volumes, the one-shot thunder clap, and the snow wind graph.
      */
     function createAudio() {
-      const BASE = "/dsh-theme-shelter/audio";
+      const BASE = ASSET_BASE + "audio";
       const FILES = { rain: "rain.mp3", fire: "fire.mp3" };
       const THUNDER = "thunder.mp3";
       /* Per-intensity loudness. The mp3s are mastered hot, so these stay low. */
@@ -1792,6 +2152,10 @@ body[data-ds-dark-theme] #${PANEL_ID} {
           state.lightning = !!on;
           scheduleStrike();
         },
+        /** A wallpaper replaces the mist: its haze would sit over the UI text. */
+        setBackdrop(on) {
+          root.dataset.backdrop = on ? "true" : "false";
+        },
         dispose() {
           stop();
           window.removeEventListener("resize", onResize);
@@ -1802,6 +2166,268 @@ body[data-ds-dark-theme] #${PANEL_ID} {
           root.remove();
         },
       };
+    }
+
+    // ---------------------------------------------------------------- wallpaper
+
+    /**
+     * The painted backdrop behind the shell. Two layers crossfade so a preset
+     * switch never flashes, and one tint layer above them carries the scene's
+     * temperature: the image itself is never re-fetched or re-decoded for it.
+     */
+    function createWallpaper(doc) {
+      const root = doc.createElement("div");
+      root.id = WALLPAPER_ID;
+      root.setAttribute("aria-hidden", "true");
+      root.dataset.on = "false";
+      root.dataset.blur = "false";
+
+      const layers = [0, 1].map(() => {
+        const layer = doc.createElement("div");
+        layer.className = "dshw-wall";
+        root.append(layer);
+        return layer;
+      });
+      const tint = doc.createElement("div");
+      tint.className = "dshw-wall-tint";
+      root.append(tint);
+
+      /* First paint layer of the document: below every surface, above the
+         canvas the shell's own background propagates to. */
+      doc.body.insertBefore(root, doc.body.firstChild);
+
+      let front = 0;
+      let shown = "";
+      let tintKey = "";
+      let blurOn = false;
+
+      /** Crop zoom and the blur bleed are one transform, so both stay in sync. */
+      function applyTransform(layer) {
+        const spec = layer.__spec;
+        if (!spec || !spec.url) {
+          layer.style.transform = "none";
+          layer.style.transformOrigin = "50% 50%";
+          return;
+        }
+        const zoom = (spec.zoom || 1) * (blurOn ? 1.06 : 1);
+        layer.style.transformOrigin = spec.origin || "50% 50%";
+        layer.style.transform = zoom === 1 ? "none" : "scale(" + zoom.toFixed(4) + ")";
+      }
+
+      /** Grade and blur live in one filter, so an idle layer can drop both. */
+      function applyFilter(layer) {
+        const spec = layer.__spec;
+        if (!spec || !spec.url) {
+          layer.style.filter = "none";
+          return;
+        }
+        const parts = [];
+        if (blurOn) parts.push("blur(" + BLUR_PX + "px)");
+        if (spec.tone) parts.push(spec.tone);
+        /* Any filter keeps a full-screen offscreen buffer alive; a plain
+           wallpaper at blur 0 is cheaper as bare paint. */
+        layer.style.filter = parts.length ? parts.join(" ") : "none";
+      }
+
+      function paint(layer, spec) {
+        layer.__spec = spec && spec.url ? spec : null;
+        if (spec && spec.url) {
+          layer.style.backgroundImage = 'url("' + String(spec.url).replace(/["\\]/g, "\\$&") + '")';
+        } else {
+          layer.style.backgroundImage = "none";
+        }
+        applyTransform(layer);
+        applyFilter(layer);
+      }
+
+      /** Take the offscreen buffer off a layer that is no longer showing. */
+      function idle(layer) {
+        if (layer.classList.contains("is-on")) return;
+        layer.style.filter = "none";
+      }
+
+      return {
+        /**
+         * Show a wallpaper, or take the layer away.
+         * @param spec `{ url, origin, zoom, tone }`, or null for no wallpaper.
+         */
+        set(spec) {
+          if (!spec || !spec.url) {
+            if (root.dataset.on === "false") return;
+            root.dataset.on = "false";
+            shown = "";
+            /* Keep the bytes until the fade has played out, then let them go. */
+            window.setTimeout(() => {
+              if (root.dataset.on === "false") {
+                paint(layers[0], null);
+                paint(layers[1], null);
+              }
+            }, 760);
+            return;
+          }
+          const key = spec.url + "|" + (spec.origin || "") + "|" + (spec.zoom || 1) + "|" + (spec.tone || "");
+          if (key === shown) return;
+          shown = key;
+          root.dataset.on = "true";
+          const next = layers[1 - front];
+          paint(next, spec);
+          /* Commit the new background before the opacity flips, otherwise the
+             incoming layer fades in already half-way through. */
+          void next.offsetWidth;
+          next.classList.add("is-on");
+          const outgoing = layers[front];
+          outgoing.classList.remove("is-on");
+          window.setTimeout(() => idle(outgoing), 850);
+          front = 1 - front;
+        },
+        /**
+         * Set the glass material: blur and the tint between image and chrome.
+         * @param options `{ blur, tint: [r, g, b], alpha }`.
+         */
+        material(options) {
+          const rgb = options.tint || [12, 20, 29];
+          /* The root paints the palette base so a still-decoding image (or a
+             gap at an edge) shows the theme's colour, never the window. */
+          root.style.backgroundColor = "#" + rgb.map(hexChannel).join("");
+          const nextBlur = !!options.blur;
+          if (nextBlur !== blurOn) {
+            blurOn = nextBlur;
+            root.dataset.blur = nextBlur ? "true" : "false";
+            applyTransform(layers[front]);
+            applyFilter(layers[front]);
+          }
+          const alpha = clamp(Number(options.alpha) || 0, 0, 0.85);
+          const key = rgb.join(",") + "|" + alpha.toFixed(3);
+          if (key === tintKey) return;
+          tintKey = key;
+          tint.style.background = "linear-gradient(180deg, "
+            + rgba(rgb, alpha * 0.62) + " 0%, " + rgba(rgb, alpha) + " 100%)";
+        },
+        dispose() {
+          root.remove();
+        },
+      };
+    }
+
+    // --------------------------------------------------------- custom wallpaper
+
+    const ASSET_DB = "dsh-theme-shelter";
+    const ASSET_STORE = "wallpaper";
+    const ASSET_KEY = "custom";
+
+    /** IndexedDB, not localStorage: a picked photo does not fit in a 5 MB quota. */
+    function openAssetDb() {
+      return new Promise((resolve, reject) => {
+        if (typeof indexedDB === "undefined") {
+          reject(new Error("no indexedDB"));
+          return;
+        }
+        let request;
+        try {
+          request = indexedDB.open(ASSET_DB, 1);
+        } catch (error) {
+          reject(error);
+          return;
+        }
+        request.onupgradeneeded = () => {
+          const db = request.result;
+          if (!db.objectStoreNames.contains(ASSET_STORE)) db.createObjectStore(ASSET_STORE);
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error || new Error("indexedDB open failed"));
+      });
+    }
+
+    /** One store operation; any failure resolves to null so the theme never breaks. */
+    function assetOperation(mode, run) {
+      return openAssetDb()
+        .then((db) => new Promise((resolve, reject) => {
+          let transaction;
+          try {
+            transaction = db.transaction(ASSET_STORE, mode);
+          } catch (error) {
+            reject(error);
+            return;
+          }
+          transaction.oncomplete = () => db.close();
+          const store = transaction.objectStore(ASSET_STORE);
+          let request;
+          try {
+            request = run(store);
+          } catch (error) {
+            reject(error);
+            return;
+          }
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error || new Error("indexedDB request failed"));
+        }))
+        .catch(() => null);
+    }
+
+    const readCustomAsset = () => assetOperation("readonly", (store) => store.get(ASSET_KEY));
+    const writeCustomAsset = (blob) => assetOperation("readwrite", (store) => store.put(blob, ASSET_KEY));
+    const dropCustomAsset = () => assetOperation("readwrite", (store) => store.delete(ASSET_KEY));
+
+    function loadImageElement(url) {
+      return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.decoding = "async";
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error("image decode failed"));
+        image.src = url;
+      });
+    }
+
+    function canvasToBlob(canvas, type, quality) {
+      return new Promise((resolve) => {
+        try {
+          canvas.toBlob((blob) => resolve(blob || null), type, quality);
+        } catch (error) {
+          resolve(null);
+        }
+      });
+    }
+
+    /**
+     * Turn a picked file into a wallpaper body. Re-encoding keeps a 20 MB photo
+     * out of IndexedDB and caps resolution at what a wide screen can use; a
+     * JPEG/WebP that is already reasonable is stored untouched.
+     * @param file the File the picker or a drop handed over.
+     * @returns the blob to store.
+     */
+    async function prepareWallpaperBlob(file) {
+      if (!file || !/^image\//i.test(file.type || "")) throw new Error("not an image");
+      if (file.size > 48 * 1024 * 1024) throw new Error("too large");
+      const url = URL.createObjectURL(file);
+      try {
+        const image = await loadImageElement(url);
+        const width = image.naturalWidth || image.width;
+        const height = image.naturalHeight || image.height;
+        if (!width || !height) throw new Error("empty image");
+        const alreadySettled = /^image\/(jpeg|webp|avif)$/i.test(file.type)
+          && file.size <= 3.5 * 1024 * 1024
+          && width <= 2560
+          && height <= 1600;
+        if (alreadySettled) return file;
+
+        const scale = Math.min(1, 2560 / width, 1600 / height);
+        const targetW = Math.max(1, Math.round(width * scale));
+        const targetH = Math.max(1, Math.round(height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("no 2d context");
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = "high";
+        context.drawImage(image, 0, 0, targetW, targetH);
+        const blob = (await canvasToBlob(canvas, "image/webp", 0.86))
+          || (await canvasToBlob(canvas, "image/jpeg", 0.9));
+        if (!blob) throw new Error("encode failed");
+        return blob;
+      } finally {
+        URL.revokeObjectURL(url);
+      }
     }
 
     // --------------------------------------------------------------------- panel
@@ -1832,8 +2458,19 @@ body[data-ds-dark-theme] #${PANEL_ID} {
         '<span class="dshw-seg" data-group="scene"></span></div>',
         '<div class="dshw-row"><span class="dshw-label">强度</span>',
         '<span class="dshw-seg" data-group="intensity"></span></div>',
+        '<div class="dshw-row dshw-wall-head"><span class="dshw-label">壁纸</span>',
+        '<span class="dshw-wall-name"></span></div>',
+        '<div class="dshw-walls" data-group="wallpaper" role="group" aria-label="壁纸"></div>',
+        '<div class="dshw-wall-status" role="status"></div>',
+        '<div class="dshw-row"><span class="dshw-label">取景</span>',
+        '<span class="dshw-seg" data-group="crop"></span></div>',
+        '<div class="dshw-row"><span class="dshw-label">调色</span>',
+        '<span class="dshw-seg" data-group="tone"></span></div>',
+        '<div class="dshw-row"><span class="dshw-label">玻璃</span>',
+        '<span class="dshw-seg" data-group="depth"></span></div>',
         '<div class="dshw-toggles">',
         '<button class="dshw-toggle" type="button" data-key="palette" aria-pressed="true">配色</button>',
+        '<button class="dshw-toggle" type="button" data-key="wallBlur" aria-pressed="true">柔化</button>',
         '<button class="dshw-toggle" type="button" data-key="lightning" aria-pressed="false">闪电</button>',
         '<button class="dshw-toggle" type="button" data-key="sound" aria-pressed="false">声音</button>',
         '<button class="dshw-toggle" type="button" data-key="night" aria-pressed="false">夜间</button>',
@@ -1852,9 +2489,13 @@ body[data-ds-dark-theme] #${PANEL_ID} {
       const groups = {
         scene: panel.querySelector('[data-group="scene"]'),
         intensity: panel.querySelector('[data-group="intensity"]'),
+        crop: panel.querySelector('[data-group="crop"]'),
+        tone: panel.querySelector('[data-group="tone"]'),
+        depth: panel.querySelector('[data-group="depth"]'),
       };
       const sceneLabels = { rain: "雨", snow: "雪", fire: "火", none: "关" };
       const intensityLabels = { 1: "轻", 2: "中", 3: "暴" };
+      const depthLabels = { 1: "淡", 2: "中", 3: "浓" };
 
       for (const key of SCENES) {
         const button = doc.createElement("button");
@@ -1872,6 +2513,199 @@ body[data-ds-dark-theme] #${PANEL_ID} {
         button.addEventListener("click", () => controller.setIntensity(level));
         groups.intensity.append(button);
       }
+      for (const level of [1, 2, 3]) {
+        const button = doc.createElement("button");
+        button.type = "button";
+        button.textContent = depthLabels[level];
+        button.dataset.value = String(level);
+        button.addEventListener("click", () => controller.setWallDepth(level));
+        groups.depth.append(button);
+      }
+      for (const [id, crop] of Object.entries(WALL_CROPS)) {
+        const button = doc.createElement("button");
+        button.type = "button";
+        button.textContent = crop.label;
+        button.dataset.value = id;
+        button.addEventListener("click", () => controller.setWallCrop(id));
+        groups.crop.append(button);
+      }
+      for (const [id, tone] of Object.entries(WALL_TONES)) {
+        const button = doc.createElement("button");
+        button.type = "button";
+        button.textContent = tone.label;
+        button.dataset.value = id;
+        button.addEventListener("click", () => controller.setWallTone(id));
+        groups.tone.append(button);
+      }
+
+      /* ----- wallpaper picker ----- */
+
+      const walls = panel.querySelector('[data-group="wallpaper"]');
+      const wallName = panel.querySelector(".dshw-wall-name");
+      const wallStatus = panel.querySelector(".dshw-wall-status");
+
+      const fileInput = doc.createElement("input");
+      fileInput.type = "file";
+      fileInput.accept = "image/png,image/jpeg,image/webp,image/avif,image/gif";
+      fileInput.hidden = true;
+      fileInput.addEventListener("change", () => {
+        const file = fileInput.files && fileInput.files[0];
+        fileInput.value = "";
+        if (file) loadCustom(file);
+      });
+      panel.append(fileInput);
+
+      let statusTimer = 0;
+      function setStatus(text) {
+        if (statusTimer) window.clearTimeout(statusTimer);
+        statusTimer = 0;
+        wallStatus.textContent = text || "";
+        wallStatus.dataset.show = text ? "true" : "false";
+        if (!text) return;
+        statusTimer = window.setTimeout(() => {
+          statusTimer = 0;
+          wallStatus.dataset.show = "false";
+        }, 4200);
+      }
+
+      async function loadCustom(file) {
+        setStatus("正在处理图片…");
+        try {
+          const blob = await prepareWallpaperBlob(file);
+          const stored = await controller.saveCustomWallpaper(blob);
+          setStatus(stored ? "壁纸已保存" : "壁纸已应用，刷新后可能丢失");
+        } catch (error) {
+          setStatus("这张图片读不了，换一张试试");
+        }
+      }
+
+      function wallLabel(id) {
+        if (id === WALLPAPER_NONE) return "无";
+        if (id === WALLPAPER_CUSTOM) return "自定义";
+        if (typeof id === "string" && id.startsWith("u:")) return id.slice(2);
+        const preset = wallpaperPreset(id);
+        return preset ? preset.label : "无";
+      }
+
+      /** One 64 × 44 thumbnail. The image lives on a child so the filter cannot
+          wash out the remove badge. */
+      function makeTile(kind, id, label, title) {
+        const tile = doc.createElement("div");
+        tile.className = "dshw-wall-tile";
+        tile.dataset.kind = kind;
+        tile.dataset.value = id;
+        tile.setAttribute("role", "button");
+        tile.setAttribute("tabindex", "0");
+        tile.setAttribute("aria-pressed", "false");
+        tile.title = title || label;
+
+        let image = "";
+        const preset = wallpaperPreset(id);
+        if (id === WALLPAPER_CUSTOM) {
+          image = controller.customWallpaper || "";
+        } else if (id.startsWith("u:")) {
+          image = ASSET_BASE + "wallpapers/u/" + encodeURIComponent(id.slice(2));
+        } else if (preset) {
+          image = ASSET_BASE + "wallpapers/" + preset.id + "-thumb.webp";
+        }
+
+        const art = doc.createElement("span");
+        art.className = "dshw-wall-art";
+        if (image) {
+          const crop = WALL_CROPS[controller.settings.wallCrop] || WALL_CROPS.full;
+          const tone = WALL_TONES[controller.settings.wallTone] || WALL_TONES.none;
+          art.style.backgroundImage = 'url("' + image.replace(/["\\]/g, "\\$&") + '")';
+          art.style.transformOrigin = crop.origin;
+          art.style.transform = crop.zoom === 1 ? "none" : "scale(" + crop.zoom + ")";
+          art.style.filter = tone.filter || "none";
+        } else {
+          tile.dataset.empty = "true";
+          const glyph = doc.createElement("span");
+          glyph.className = "dshw-wall-glyph";
+          if (kind === "none") glyph.innerHTML = ICONS.none;
+          else glyph.textContent = "＋";
+          tile.append(glyph);
+        }
+        tile.append(art);
+
+        if (id === WALLPAPER_CUSTOM && controller.customWallpaper) {
+          const clear = doc.createElement("button");
+          clear.className = "dshw-wall-clear";
+          clear.type = "button";
+          clear.title = "移除自定义壁纸";
+          clear.setAttribute("aria-label", "移除自定义壁纸");
+          clear.textContent = "×";
+          clear.addEventListener("click", (event) => {
+            event.stopPropagation();
+            controller.clearCustomWallpaper();
+          });
+          tile.append(clear);
+        }
+
+        const activate = () => {
+          /* An empty custom slot is a picker button, and a selected one means
+             "click again to replace"; everything else is a plain selection. */
+          if (kind === "custom"
+            && (!controller.customWallpaper || controller.settings.wallpaper === WALLPAPER_CUSTOM)) {
+            fileInput.click();
+            return;
+          }
+          controller.setWallpaper(id);
+        };
+        tile.addEventListener("click", activate);
+        tile.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          activate();
+        });
+        return tile;
+      }
+
+      let wallSignature = "";
+      function rebuildWalls() {
+        /* The custom URL is part of the signature, not just its presence: a
+           replaced image gets a new object URL and its old one is revoked. The
+           crop and the grade change every thumbnail, so they are in it too. */
+        const signature = controller.userWallpapers.join("|")
+          + "#" + (controller.customWallpaper || "")
+          + "#" + controller.settings.wallCrop + "#" + controller.settings.wallTone;
+        if (signature === wallSignature) return;
+        wallSignature = signature;
+        walls.textContent = "";
+        walls.append(makeTile("none", WALLPAPER_NONE, "无壁纸"));
+        for (const preset of WALLPAPERS) {
+          walls.append(makeTile("preset", preset.id, preset.label, preset.title));
+        }
+        walls.append(makeTile(
+          "custom",
+          WALLPAPER_CUSTOM,
+          controller.customWallpaper ? "自定义壁纸（再次点击更换）" : "选择本地图片",
+        ));
+        for (const name of controller.userWallpapers) {
+          walls.append(makeTile("user", "u:" + name, name));
+        }
+      }
+
+      /* Dropping an image anywhere on the panel is the same gesture as picking
+         it: the file never leaves the browser. */
+      panel.addEventListener("dragover", (event) => {
+        if (!event.dataTransfer) return;
+        if (!Array.from(event.dataTransfer.types || []).includes("Files")) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+        panel.dataset.drop = "true";
+      });
+      panel.addEventListener("dragleave", (event) => {
+        if (event.relatedTarget && panel.contains(event.relatedTarget)) return;
+        panel.dataset.drop = "false";
+      });
+      panel.addEventListener("drop", (event) => {
+        event.preventDefault();
+        panel.dataset.drop = "false";
+        const files = event.dataTransfer ? Array.from(event.dataTransfer.files || []) : [];
+        const image = files.find((file) => /^image\//i.test(file.type || ""));
+        if (image) loadCustom(image);
+      });
 
       panel.querySelectorAll("[data-key]").forEach((button) => {
         button.addEventListener("click", () => controller.toggle(button.dataset.key));
@@ -1884,6 +2718,8 @@ body[data-ds-dark-theme] #${PANEL_ID} {
         open = next;
         panel.dataset.open = next ? "true" : "false";
         fab.setAttribute("aria-expanded", next ? "true" : "false");
+        /* Picking up images dropped into ~/.dsh/wallpapers needs no reload. */
+        if (next) controller.refreshWallpapers();
       }
       fab.addEventListener("click", (event) => {
         event.stopPropagation();
@@ -1947,19 +2783,47 @@ body[data-ds-dark-theme] #${PANEL_ID} {
           button.classList.toggle("is-on", Number(button.dataset.value) === settings.intensity);
           button.disabled = settings.scene === "none";
         });
+
+        rebuildWalls();
+        const wallOn = settings.wallpaper !== WALLPAPER_NONE;
+        wallName.textContent = wallLabel(settings.wallpaper);
+        walls.querySelectorAll(".dshw-wall-tile").forEach((tile) => {
+          const on = tile.dataset.value === settings.wallpaper;
+          tile.classList.toggle("is-on", on);
+          tile.setAttribute("aria-pressed", on ? "true" : "false");
+          /* A selection restored from settings can sit outside the visible
+             rows; keep it in view without scrolling the whole page. */
+          if (on && panel.dataset.open === "true") tile.scrollIntoView({ block: "nearest" });
+        });
+        groups.depth.querySelectorAll("button").forEach((button) => {
+          button.classList.toggle("is-on", Number(button.dataset.value) === settings.wallDepth);
+          button.disabled = !wallOn;
+        });
+        groups.crop.querySelectorAll("button").forEach((button) => {
+          button.classList.toggle("is-on", button.dataset.value === settings.wallCrop);
+          button.disabled = !wallOn;
+        });
+        groups.tone.querySelectorAll("button").forEach((button) => {
+          button.classList.toggle("is-on", button.dataset.value === settings.wallTone);
+          button.disabled = !wallOn;
+        });
+
         panel.querySelectorAll("[data-key]").forEach((button) => {
           const key = button.dataset.key;
           const on = key === "sound" || key === "lightning" || key === "night" || key === "palette"
+            || key === "wallBlur"
             ? !!settings[key]
             : false;
           button.setAttribute("aria-pressed", on ? "true" : "false");
           if (key === "lightning" || key === "night") button.disabled = settings.scene === "none";
+          if (key === "wallBlur") button.disabled = !wallOn;
         });
       }
 
       return {
         render,
         dispose() {
+          if (statusTimer) window.clearTimeout(statusTimer);
           doc.removeEventListener("click", onDocumentClick);
           doc.removeEventListener("keydown", onDocumentKey);
           doc.removeEventListener("click", onAnyInteraction, true);
@@ -1998,15 +2862,25 @@ body[data-ds-dark-theme] #${PANEL_ID} {
         /* A reload can leave the previous mount behind (hot-swapped bundle, a
            duplicate entry, a crashed teardown). Stale roots would stack their
            veils, so every mount starts from a clean slate. */
-        for (const id of [ROOT_ID, FAB_ID, PANEL_ID, HINT_ID]) {
+        for (const id of [ROOT_ID, WALLPAPER_ID, FAB_ID, PANEL_ID, HINT_ID]) {
           for (const stale of doc.querySelectorAll("#" + id)) stale.remove();
         }
         const style = installStyle(doc);
         const engine = createWeatherEngine(doc, { thunder: (delay) => audio.thunder(delay) });
+        const wallpaper = createWallpaper(doc);
         const listeners = new Set();
         let paletteDispose = null;
         let paletteKey = null;
         let mounted = true;
+
+        /* The picked image lives in IndexedDB and is exposed as one object URL,
+           so the layer and the panel thumbnail read exactly the same bytes. */
+        let customUrl = null;
+        let userWallpapers = [];
+        const setCustomUrl = (blob) => {
+          if (customUrl) URL.revokeObjectURL(customUrl);
+          customUrl = blob ? URL.createObjectURL(blob) : null;
+        };
 
         const readScheme = () => {
           try {
@@ -2032,10 +2906,59 @@ body[data-ds-dark-theme] #${PANEL_ID} {
         };
         const stopNightGuard = () => nightObserver.disconnect();
 
+        /** Night mode only means anything while a scene is actually running. */
+        const nightOn = () => !!settings.night && settings.scene !== "none";
+
+        /** The scene's own palette, tint included, whatever the switch says. */
+        const sceneTokens = () => {
+          const base = nightOn() ? NIGHT_TOKENS : TOKENS;
+          const extra = settings.scene !== "none" ? SCENE_TOKENS[settings.scene] || {} : {};
+          return { ...base, ...(nightOn() ? nightify(extra) : extra) };
+        };
+
+        /** What the shell wears: the switch off means no scene tint. */
+        const shellTokens = () => (settings.palette && settings.scene !== "none"
+          ? sceneTokens()
+          : nightOn() ? NIGHT_TOKENS : TOKENS);
+
+        const wallDepth = () => clamp(Number(settings.wallDepth) || 2, 1, 3);
+
+        /**
+         * Paint the backdrop. Called on every settings change, but the layer
+         * only touches the DOM when the image, the tint or the blur changed.
+         */
+        const applyWallpaper = () => {
+          const id = settings.wallpaper;
+          const preset = wallpaperPreset(id);
+          const crop = WALL_CROPS[settings.wallCrop] || WALL_CROPS.full;
+          const tone = WALL_TONES[settings.wallTone] || WALL_TONES.none;
+          let url = null;
+          if (id === WALLPAPER_CUSTOM) {
+            url = customUrl;
+          } else if (typeof id === "string" && id.startsWith("u:")) {
+            url = ASSET_BASE + "wallpapers/u/" + encodeURIComponent(id.slice(2));
+          } else if (preset) {
+            url = ASSET_BASE + "wallpapers/" + preset.id + ".webp";
+          }
+          wallpaper.set(url ? { url, origin: crop.origin, zoom: crop.zoom, tone: tone.filter } : null);
+          engine.setBackdrop(url !== null);
+
+          /* The tint is the light coming through the window: it follows the
+             scene even when the shell's own palette is switched off. */
+          const scheme = effectiveScheme();
+          const base = parseHexColor(sceneTokens()["--dsw-alias-bg-base"]?.[scheme] || "#0c141d");
+          wallpaper.material({
+            blur: !!settings.wallBlur,
+            tint: base ? [base.r, base.g, base.b] : [12, 20, 29],
+            alpha: GLASS_VEIL[scheme] ? GLASS_VEIL[scheme][wallDepth()] : 0.3,
+          });
+        };
+
         const applyPalette = () => {
-          /* Disabled: drop the layer once, then clear the memo so re-enabling
-             always re-applies even if every token is unchanged. */
-          if (settings.scene === "none" || !settings.palette) {
+          const wallOn = settings.wallpaper !== WALLPAPER_NONE;
+          const paletteOn = settings.scene !== "none" && settings.palette;
+          /* Nothing to override: no weather tint and no glass to build. */
+          if (!paletteOn && !wallOn) {
             if (paletteDispose) {
               paletteDispose();
               paletteDispose = null;
@@ -2043,9 +2966,10 @@ body[data-ds-dark-theme] #${PANEL_ID} {
             paletteKey = null;
             return;
           }
-          const base = settings.night ? NIGHT_TOKENS : TOKENS;
-          const extra = SCENE_TOKENS[settings.scene] || SCENE_TOKENS.rain;
-          const layer = { ...base, ...(settings.night ? nightify(extra) : extra) };
+          /* A wallpaper needs surfaces that let it through, so wallpaper mode
+             always owns a token layer; the palette switch then decides whether
+             that glass carries the scene's tint or stays neutral. */
+          const layer = wallOn ? glassify(shellTokens(), wallDepth()) : shellTokens();
           /* Pass both arms of every pair: overrideTokens composes them against
              the active theme's own color scheme, so following a light/dark
              switch needs no DOM observation. Flattening to the document
@@ -2053,7 +2977,10 @@ body[data-ds-dark-theme] #${PANEL_ID} {
              which re-applies the preference attribute on every publish — and
              that feedback loop froze the renderer before boot could finish.
              The memo below also makes repeated calls a no-op. */
-          const key = (settings.night ? "night" : "day") + "|" + settings.scene + "|" + JSON.stringify(layer);
+          const key = (nightOn() ? "night" : "day")
+            + "|" + (paletteOn ? settings.scene : "neutral")
+            + "|" + (wallOn ? "glass" + wallDepth() : "solid")
+            + "|" + JSON.stringify(layer);
           if (paletteKey === key) return;
           if (paletteDispose) {
             paletteDispose();
@@ -2098,6 +3025,7 @@ body[data-ds-dark-theme] #${PANEL_ID} {
           /* applyNight owns the engine's scheme; calling setScheme here too only
              repainted the mist twice. */
           applyNight();
+          applyWallpaper();
           applyPalette();
           /* setIntensity owns reset + start/stop, so setScene must not restart. */
           engine.setScene(settings.scene);
@@ -2119,11 +3047,48 @@ body[data-ds-dark-theme] #${PANEL_ID} {
           if (!mounted) return;
           engine.setScheme(effectiveScheme());
           assertDark();
-          /* The token layer carries both arms and the theme service composes it
+          /* The glass layer carries both arms and the theme service composes it
              against its own active scheme, so a scheme switch needs no re-apply
-             here — and must not re-enter applyPalette while it is publishing. */
+             here — and must not re-enter applyPalette while it is publishing.
+             The wallpaper tint is computed from the resolved scheme, so only
+             that one is refreshed. */
+          applyWallpaper();
         };
         ctx.on("theme/change", onThemeChange);
+
+        const isUserWallpaperName = (name) => typeof name === "string"
+          && !name.startsWith(".")
+          && /^[^\\/:*?"<>|\u0000-\u001f]{1,180}\.(webp|jpe?g|png|avif|gif)$/i.test(name);
+
+        /** The host lists `~/.dsh/wallpapers`; an absent folder is an empty list. */
+        const refreshUserWallpapers = async () => {
+          let names = [];
+          let listed = false;
+          try {
+            const response = await fetch(ASSET_BASE + "wallpapers/list.json", { cache: "no-store" });
+            if (response.ok) {
+              const body = await response.json();
+              if (body && Array.isArray(body.user)) {
+                names = body.user.filter(isUserWallpaperName);
+                listed = true;
+              }
+            }
+          } catch (error) {
+            /* no host route (preview harness) or offline: the built-ins remain */
+          }
+          if (!mounted) return;
+          const changed = names.join("|") !== userWallpapers.join("|");
+          userWallpapers = names;
+          /* The selected file is gone from the folder: fall back rather than
+             leaving the shell over an empty backdrop. */
+          if (listed && settings.wallpaper.startsWith("u:")
+            && !names.includes(settings.wallpaper.slice(2))) {
+            settings.wallpaper = DEFAULTS.wallpaper;
+            applyAll();
+            return;
+          }
+          if (changed) notify();
+        };
 
         const controller = {
           version: VERSION,
@@ -2143,6 +3108,18 @@ body[data-ds-dark-theme] #${PANEL_ID} {
             listeners.add(listener);
             listener({ ...settings });
             return () => listeners.delete(listener);
+          },
+          /** Built-in wallpapers, in panel order. */
+          get wallpapers() {
+            return WALLPAPERS.map(({ id, label }) => ({ id, label }));
+          },
+          /** Object URL of the picked image, or null when none is stored. */
+          get customWallpaper() {
+            return customUrl;
+          },
+          /** Images found in ~/.dsh/wallpapers on the last refresh. */
+          get userWallpapers() {
+            return userWallpapers.slice();
           },
           /** Called by the panel once the first-run nudge has been seen. */
           dismissHint() {
@@ -2177,11 +3154,59 @@ body[data-ds-dark-theme] #${PANEL_ID} {
             settings.palette = !!on;
             applyAll();
           },
+          /** none · jinxi · moon · hearth · ink · custom · u:<file>. */
+          setWallpaper(id) {
+            if (!isWallpaperId(id)) return;
+            /* "custom" without a stored image has nothing to show. */
+            if (id === WALLPAPER_CUSTOM && !customUrl) return;
+            settings.wallpaper = id;
+            applyAll();
+          },
+          setWallDepth(level) {
+            settings.wallDepth = clamp(Number(level) || 2, 1, 3);
+            applyAll();
+          },
+          /** full · left · right — applies to whichever wallpaper is showing. */
+          setWallCrop(id) {
+            if (!hasOwn(WALL_CROPS, id)) return;
+            settings.wallCrop = id;
+            applyAll();
+          },
+          /** none · cool · warm · ink — a colour grade over the image. */
+          setWallTone(id) {
+            if (!hasOwn(WALL_TONES, id)) return;
+            settings.wallTone = id;
+            applyAll();
+          },
+          setWallBlur(on) {
+            settings.wallBlur = !!on;
+            applyAll();
+          },
+          /** Store a picked image and switch to it. False when it is session-only. */
+          async saveCustomWallpaper(blob) {
+            if (!blob) return false;
+            setCustomUrl(blob);
+            const stored = (await writeCustomAsset(blob)) !== null;
+            settings.wallpaper = WALLPAPER_CUSTOM;
+            applyAll();
+            return stored;
+          },
+          async clearCustomWallpaper() {
+            await dropCustomAsset();
+            setCustomUrl(null);
+            if (settings.wallpaper === WALLPAPER_CUSTOM) settings.wallpaper = DEFAULTS.wallpaper;
+            applyAll();
+          },
+          /** Re-read ~/.dsh/wallpapers; the panel calls this when it opens. */
+          refreshWallpapers() {
+            refreshUserWallpapers();
+          },
           toggle(key) {
             if (key === "lightning") controller.setLightning(!settings.lightning);
             else if (key === "sound") controller.setSound(!settings.sound);
             else if (key === "night") controller.setNight(!settings.night);
             else if (key === "palette") controller.setPalette(!settings.palette);
+            else if (key === "wallBlur") controller.setWallBlur(!settings.wallBlur);
           },
           reset() {
             Object.assign(settings, DEFAULTS);
@@ -2206,6 +3231,19 @@ body[data-ds-dark-theme] #${PANEL_ID} {
         window.__dshWeather = controller;
         window.__dshRain = controller;
 
+        /* The picked image may live in IndexedDB; read it in the background and
+           repaint once, or fall back to the default when the setting survives
+           but its blob does not. */
+        readCustomAsset().then((blob) => {
+          if (!mounted) return;
+          if (blob) setCustomUrl(blob);
+          if (!customUrl && settings.wallpaper === WALLPAPER_CUSTOM) {
+            settings.wallpaper = DEFAULTS.wallpaper;
+          }
+          applyAll();
+        });
+        refreshUserWallpapers();
+
         return () => {
           mounted = false;
           stopNightGuard();
@@ -2220,6 +3258,8 @@ body[data-ds-dark-theme] #${PANEL_ID} {
           if (paletteDispose) paletteDispose();
           paletteDispose = null;
           panel.dispose();
+          wallpaper.dispose();
+          setCustomUrl(null);
           engine.dispose();
           if (style && style.parentNode) style.remove();
           try {

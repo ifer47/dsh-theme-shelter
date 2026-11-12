@@ -146,7 +146,9 @@
     background: var(--dsw-specific-bubble); border: 1px solid var(--dsw-alias-border-l1);
   }
   .prose h3 { margin: 0 0 6px; font-size: 15px; }
-  .prose p { margin: 0 0 10px; color: var(--dsw-alias-label-secondary); }
+  /* the shell renders conversation body text in the primary label colour;
+     the mock follows it so contrast against a wallpaper is judged fairly */
+  .prose p { margin: 0 0 10px; color: var(--dsw-alias-label-primary); }
   pre {
     margin: 10px 0 4px; padding: 12px 14px; border-radius: 12px; overflow: auto;
     background: var(--dsw-alias-markdown-code-block); border: 1px solid var(--dsw-alias-border-l1);
@@ -262,6 +264,10 @@ weather.setNight(true)     // 夜间模式</pre>
   const debug = location.hash === '#debug';
   if (debug) document.body.dataset.debug = 'true';
 
+  /* The harness opens from disk, where the host's media route does not exist:
+     point the bundle at the package folder instead of /dsh-theme-shelter/. */
+  window.__dshShelterBase = '../';
+
   /* --- A stand-in for the shell's module kernel: capture the factory. --- */
   window.__ModuleLoader__ = {
     load({ id, factory }) {
@@ -350,7 +356,10 @@ weather.setNight(true)     // 夜间模式</pre>
       boot.textContent = 'bundle: ' + captured.id
         + ' · exports: ' + Object.keys(mod).join(', ')
         + (settings ? ' · scene: ' + settings.scene + ' · intensity: ' + settings.intensity
-          + ' · night: ' + settings.night + ' · sound: ' + settings.sound : '')
+          + ' · night: ' + settings.night + ' · sound: ' + settings.sound
+          + ' · wallpaper: ' + settings.wallpaper + '/' + settings.wallCrop + '/' + settings.wallTone
+          + '/' + settings.wallDepth
+          + (settings.wallBlur ? '/blur' : '') : '')
         + ' · scheme: ' + scheme;
     }
 

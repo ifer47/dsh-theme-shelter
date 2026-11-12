@@ -1,7 +1,7 @@
 {
   "name": "dsh-theme-shelter",
-  "version": "0.3.1",
-  "description": "Immersive weather ambience for the DeepSeek Harness Web GUI: physical rain with splashes, snow crystals with habits, a hearth, procedural snow wind and recorded rain/fire. 沉浸式天气主题：物理化的雨与水花、带晶型的雪、炉火、真实录音与程序化风声。",
+  "version": "0.7.1",
+  "description": "Immersive weather ambience for the DeepSeek Harness Web GUI: physical rain with splashes, snow crystals with habits, a hearth, procedural snow wind, recorded rain/fire, and twenty-five wallpapers behind glass. 沉浸式天气主题：物理化的雨与水花、带晶型的雪、炉火、真实录音、程序化风声与二十五张玻璃壁纸。",
   "icon": "assets/logo.svg",
   "type": "module",
   "main": "lib/index.js",
@@ -17,7 +17,8 @@
     "dsh",
     "dsh-plugin",
     "theme",
-    "rain"
+    "rain",
+    "wallpaper"
   ],
   "author": "ifer47",
   "license": "MIT",
@@ -50,6 +51,7 @@
     "lib",
     "client",
     "audio",
+    "wallpapers",
     "preview",
     "docs",
     "cordis.patch.yml",
