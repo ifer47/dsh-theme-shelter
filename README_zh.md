@@ -184,8 +184,8 @@ profile 里是 `link:` 依赖，改完 `client/client.js` 只需重启 DSH。三
 1. **两个地方一起改版本号** —— `package.json` 的 `version` **和** `client/client.js` 里的 `const VERSION`（面板页脚显示的是后者）。只改一处，面板会一直报上一个版本。
 2. **提交、打 tag、推送：**
    ```powershell
-   git commit -am "chore: release 0.7.2"
-   git tag -a v0.7.2 -m "0.7.2"
+   git commit -am "chore: release 0.7.3"
+   git tag -a v0.7.3 -m "0.7.3"
    git push --follow-tags
    ```
 3. **发到 npm。** `publishConfig` 已经把发布目标钉在官方源，所以即使机器级的 `.npmrc` 用的是国内镜像，也不需要加 `--registry`：

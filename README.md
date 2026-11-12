@@ -4,7 +4,7 @@
 
 # Shelter
 
-<p><a href="./README_zh.md">中文</a></p>
+<p><a href="./README_zh.md">Chinese</a></p>
 
 <p>
   <a href="https://github.com/ifer47/dsh-theme-shelter/releases"><img src="https://img.shields.io/github/v/tag/ifer47/dsh-theme-shelter?label=version&color=blue" alt="Version" /></a>
@@ -21,9 +21,9 @@
 </div>
 
 <p align="center">
-  <img src="docs/night-pool.jpg" width="264" alt="壁纸 · 洞天: dinner beside a turquoise pool inside a cave" />
-  <img src="docs/night-hearth.jpg" width="264" alt="壁纸 · 火塘: a hearth room in the rock, the storm outside the door" />
-  <img src="docs/night-wallpaper.jpg" width="264" alt="壁纸 · 月崖: the default cliff doorway under the moon" />
+  <img src="docs/night-pool.jpg" width="264" alt="Cave Pool: dinner beside a turquoise pool inside a cave" />
+  <img src="docs/night-hearth.jpg" width="264" alt="Hearth Room: the fire indoors, the storm outside the door" />
+  <img src="docs/night-wallpaper.jpg" width="264" alt="Moon Cliff: the default cliff doorway under the moon" />
   <img src="docs/night-rain.jpg" width="264" alt="Rain at night" />
   <img src="docs/night-snow.jpg" width="264" alt="Snow at night" />
   <img src="docs/night-fire.jpg" width="264" alt="Hearth at night" />
@@ -49,18 +49,18 @@ Semantic colors (error red, success green, warning amber) are untouched in every
 
 ## Wallpapers
 
-Twenty-five wallpapers, every one a different picture. Four are the hero paintings; eighteen are a story series drawn from the same world — mountain villages at dawn, a refuge in bad weather, a hidden valley, a melon patch at dusk; and three are painted procedurally by `tools/make-wallpapers.py`.
+Twenty-five wallpapers, every one a different picture. Four are the hero paintings; eighteen are a story series drawn from the same world — mountain villages at dawn, a refuge in bad weather, a hidden valley, a melon patch at dusk; and three are painted procedurally by `tools/make-wallpapers.py`. The panel labels them in Chinese; the names below are their translations.
 
 | Hero painting | What you get |
 | --- | --- |
-| **月崖 (Moon cliff)** | the default: a doorway lit under a cliff, the moon above the snow |
-| **望楼 (Watchtower)** | a wooden tower lit by lanterns, a fire burning on the far ridge |
-| **归途 (Homeward)** | an old traveller following his own tracks toward a lit cave door |
-| **村雪 (Village snow)** | a thatched yard under snow, warm windows, a dog by the fence |
+| **Moon Cliff** | the default: a doorway lit under a cliff, the moon above the snow |
+| **Watchtower** | a wooden tower lit by lanterns, a fire burning on the far ridge |
+| **Homeward** | an old traveller following his own tracks toward a lit cave door |
+| **Village Snow** | a thatched yard under snow, warm windows, a dog by the fence |
 
-**The story series (18):** 晨寨 (a hamlet at first light) · 炊烟 (smoke over the same hamlet) · 雪阶 (a stair cut into a frozen cliff) · 火塘 (the hearth room, door open to the snow) · 夜渡 (a boat in a storm) · 泊岸 (moored under the water pavilion) · 洞宴 (a feast inside the rock) · 桃源 (the peach-blossom valley) · 花溪 (the same valley, blossoms in front) · 崖居 (dwellings in the cliff face) · 雪径 (two figures on a snowy path) · 围炉 (two by the fire in a cave) · 洞楼 (a wooden house built into a cave) · 洞天 (dinner beside a turquoise pool) · 水帘 (the same pool behind a waterfall) · 暖潭 (the warm pool, blossoms in the light) · 藤居 (a house in a melon field) · 夏院 (a summer night yard, watermelon and a cat).
+**The story series (18):** Morning Stockade (a hamlet at first light) · Chimney Smoke (smoke over the same hamlet) · Snow Steps (a stair cut into a frozen cliff) · Hearth Room (the fire indoors, the door open to the snow) · Night Crossing (a boat in a storm) · Mooring (moored under the water pavilion) · Cave Feast (a feast inside the rock) · Peach Valley (the peach-blossom valley) · Blossom Stream (the same valley, blossoms in front) · Cliff Dwellings (rooms cut into the cliff face) · Snow Path (two figures on a snowy path) · By the Fire (two by the fire in a cave) · Cave House (a wooden house built into a cave) · Cave Pool (dinner beside a turquoise pool) · Water Veil (the same pool behind a waterfall) · Warm Pool (the pool, blossoms in the light) · Vine House (a house in a melon field) · Summer Yard (a summer night yard, watermelon and a cat).
 
-**The painted atmospheres (3):** 夜林 (misty wood) · 檐雨 (wet pane and bokeh) · 极光 (aurora curtains).
+**The painted atmospheres (3):** Night Wood (misty wood) · Eaves Rain (wet pane and bokeh) · Aurora (light curtains over a ridge).
 
 The picker is a 3-column strip that scrolls after three rows, and it scrolls the current wallpaper into view when the panel opens.
 
@@ -68,16 +68,16 @@ Framing and grading are independent of the image, so every wallpaper — yours i
 
 | Control | Effect |
 | --- | --- |
-| **取景 (Framing)** | 全 / 左 / 右 — the side crops zoom 1.5× toward that edge, so a wide painting gets a new composition |
-| **调色 (Grade)** | 原 / 冷 / 暖 / 墨 — cool, warm sepia, or monochrome |
-| **玻璃 (Glass)** | 淡 / 中 / 浓 — how much the veil dims the picture; cards and the composer stay solid enough to read |
-| **柔化 (Frost)** | blurs the picture only; the chrome keeps its own contrast |
+| **Framing** | Full / Left / Right — the side crops zoom 1.5× toward that edge, so a wide painting gets a new composition |
+| **Grade** | Original / Cool / Warm / Ink — a cool wash, a warm sepia, or monochrome |
+| **Glass** | Light / Medium / Heavy — how much the veil dims the picture; cards and the composer stay solid enough to read |
+| **Frost** | blurs the picture only; the chrome keeps its own contrast |
 
 <p align="center">
   <img src="docs/night-wallpaper.jpg" width="880" alt="The default painting behind the shell's glass, dark scheme" />
 </p>
 
-**Your own image.** Click the `＋` tile and pick a file, or drop an image anywhere on the panel. It is capped at 2560×1600, re-encoded as WebP when that saves bytes, and kept in IndexedDB — it survives reloads and never leaves the browser. Click the tile again to replace it; the small `×` on the selected tile deletes it.
+**Your own image.** Click the `+` tile and pick a file, or drop an image anywhere on the panel. It is capped at 2560×1600, re-encoded as WebP when that saves bytes, and kept in IndexedDB — it survives reloads and never leaves the browser. Click the tile again to replace it; the small `×` on the selected tile deletes it.
 
 **A folder of wallpapers.** Images dropped into `~/.dsh/wallpapers/` — `$DSH_HOME/wallpapers/` when the home is overridden — show up as extra tiles the next time the panel opens (PNG, JPEG, WebP, AVIF, GIF; the plugin only ever reads that folder).
 
@@ -119,9 +119,9 @@ Click the small button in the bottom-right corner:
 | Scene | rain / snow / fire / off |
 | Intensity | light / medium / heavy |
 | Wallpaper | none · 25 wallpapers · your own image — plus any file in `~/.dsh/wallpapers` |
-| Framing | 全 / 左 / 右: crop and zoom the chosen wallpaper |
-| Grade | 原 / 冷 / 暖 / 墨: recolour it |
-| Glass | 淡 / 中 / 浓: how much the veil dims the picture |
+| Framing | Full / Left / Right: crop and zoom the chosen wallpaper |
+| Grade | Original / Cool / Warm / Ink: recolour it |
+| Glass | Light / Medium / Heavy: how much the veil dims the picture |
 | Frost | soften the image; the rest of the chrome keeps its own contrast |
 | Palette | theme colors on or off — the animation runs either way |
 | Lightning | rain only: bolt, flash, thunder |
@@ -134,7 +134,7 @@ Click the small button in the bottom-right corner:
 
 Settings live in `localStorage["dsh-theme-shelter/v2"]` and survive reloads; a picked wallpaper image is the one thing that lives in IndexedDB instead, because a photo does not fit in the 5 MB quota.
 
-**First run.** On a fresh install a small bubble appears above that button — “点这里切换天气”. It never takes a click itself: any click or keypress anywhere dismisses it, and so does twelve seconds passing. If you miss it, the button is always in the bottom-right corner: 28 px, with a cloud, umbrella, snowflake or flame depending on the scene.
+**First run.** On a fresh install a small bubble appears above that button with a one-line hint (“click here to switch the weather”, in the UI's own language). It never takes a click itself: any click or keypress anywhere dismisses it, and so does twelve seconds passing. If you miss it, the button is always in the bottom-right corner: 28 px, with a cloud, umbrella, snowflake or flame depending on the scene.
 
 Console API:
 
@@ -145,7 +145,7 @@ __dshWeather.setPalette(false)    // animation only, default colors
 __dshWeather.setWallpaper("tower") // an id from __dshWeather.wallpapers, or none / custom / "u:<file>"
 __dshWeather.setWallCrop("left")  // full · left · right
 __dshWeather.setWallTone("warm")  // none · cool · warm · ink
-__dshWeather.setWallDepth(3)      // 1 淡 / 2 中 / 3 浓
+__dshWeather.setWallDepth(3)      // 1 light / 2 medium / 3 heavy
 __dshWeather.setWallBlur(true)    // frosted image
 __dshWeather.setSound(true)
 __dshWeather.setNight(false)
@@ -184,8 +184,8 @@ Three things have to agree: the git tag, `package.json`, and npm. The market rea
 1. **Bump the version in two places** — `version` in `package.json` **and** `const VERSION` in `client/client.js` (the panel footer shows that one). Changing only one leaves the panel reporting the previous release.
 2. **Commit, tag, push:**
    ```powershell
-   git commit -am "chore: release 0.7.2"
-   git tag -a v0.7.2 -m "0.7.2"
+   git commit -am "chore: release 0.7.3"
+   git tag -a v0.7.3 -m "0.7.3"
    git push --follow-tags
    ```
 3. **Publish to npm.** `publishConfig` already points at the origin registry, so no `--registry` is needed even when the machine-level `.npmrc` uses a China mirror:
@@ -203,14 +203,14 @@ Nothing else to upload by hand: the `tarball:` in the market entry points at a G
 - The overlay sits above the whole window, so dialogs and menus collect rain too (at very low opacity);
 - Glass only reaches surfaces painted through the `--dsw-*` tokens; a component with a hardcoded background would sit on top of the wallpaper;
 - A picked image belongs to that browser profile (IndexedDB), so it is not shared with another browser or another machine — use `~/.dsh/wallpapers/` for files that should travel with the machine;
-- The picture is a background, not a blur: raising 玻璃 trades image for calm. On a very busy painting the light scheme needs 浓 to keep long body text at a comfortable contrast;
+- The picture is a background, not a blur: raising Glass trades image for calm. On a very busy painting the light scheme needs Heavy to keep long body text at a comfortable contrast;
 - Three of the 25 wallpapers are generated illustrations, not paintings — replace them by dropping your own files into `wallpapers/`;
 - Product icons are not replaceable — that needs a registered theme;
 - The rain and fire recordings come from Pixabay (see Credits); the snow wind is generated, so there is nothing to credit there.
 
 ## Credits
 
-Twenty-two supplied paintings ship with the plugin — 「今昔是何年」, 「庇护所」, 「雪天山洞荒山老人」, 「古风冬雪树屋」 and the eighteen-scene story series — as WebP assets under `wallpapers/`. They are bundled so a fresh install already has a backdrop. The other three wallpapers (`forest`, `rain`, `aurora`) are generated by `tools/make-wallpapers.py` in this repository, so they carry no third-party licence.
+Twenty-two supplied paintings ship with the plugin — the default cliff scene, the watchtower, the old traveller coming home, the village yard, and the eighteen-scene story series — as WebP assets under `wallpapers/`. They are bundled so a fresh install already has a backdrop. The other three wallpapers (`forest`, `rain`, `aurora`) are generated by `tools/make-wallpapers.py` in this repository, so they carry no third-party licence.
 
 The ambience recordings come from **[Pixabay](https://pixabay.com/)** and are used under the [Pixabay Content License](https://pixabay.com/service/license-summary/): free for commercial and non-commercial use, no attribution required, but the files may not be redistributed as standalone assets. They are bundled here as part of a larger work.
 
