@@ -92,7 +92,7 @@ pnpm add "C:\path\to\dsh-theme-shelter"
 
 再把它加到 profile `package.json` 的 `dsh.profile.bundles` 末尾，然后刷新窗口（<kbd>Ctrl</kbd>+<kbd>R</kbd>）或重启 DSH。
 
-它也发布在 npm 上：[`dsh-theme-shelter`](https://www.npmjs.com/package/dsh-theme-shelter)。`npm i dsh-theme-shelter` 装的是同一个包，插件市场也会优先从 npm 安装。
+它也发布在 npm 上：[`dsh-theme-shelter`](https://www.npmjs.com/package/dsh-theme-shelter)。`npm i dsh-theme-shelter` 装的是同一个包，插件市场也会优先从 npm 安装。装完大约 15 MB——25 张壁纸（6.8 MB）和声音素材（7.7 MB）几乎就是全部，代码只有几百 KB。
 
 npm 12 起默认不允许从远程 tarball 或 git 地址安装（安装时安全默认值）：装远程 tarball 加 `--allow-remote`，git 依赖加 `--allow-git`。本包没有任何安装脚本，其余不受影响。
 
