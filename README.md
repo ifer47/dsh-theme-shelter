@@ -21,12 +21,12 @@
 </div>
 
 <p align="center">
-  <img src="docs/night-pool.jpg" width="160" alt="壁纸 · 洞天: dinner beside a turquoise pool inside a cave" />
-  <img src="docs/night-hearth.jpg" width="160" alt="壁纸 · 火塘: a hearth room in the rock, the storm outside the door" />
-  <img src="docs/night-wallpaper.jpg" width="160" alt="壁纸 · 月崖: the default cliff doorway under the moon" />
-  <img src="docs/night-rain.jpg" width="160" alt="Rain at night" />
-  <img src="docs/night-snow.jpg" width="160" alt="Snow at night" />
-  <img src="docs/night-fire.jpg" width="160" alt="Hearth at night" />
+  <img src="docs/night-pool.jpg" width="264" alt="壁纸 · 洞天: dinner beside a turquoise pool inside a cave" />
+  <img src="docs/night-hearth.jpg" width="264" alt="壁纸 · 火塘: a hearth room in the rock, the storm outside the door" />
+  <img src="docs/night-wallpaper.jpg" width="264" alt="壁纸 · 月崖: the default cliff doorway under the moon" />
+  <img src="docs/night-rain.jpg" width="264" alt="Rain at night" />
+  <img src="docs/night-snow.jpg" width="264" alt="Snow at night" />
+  <img src="docs/night-fire.jpg" width="264" alt="Hearth at night" />
 </p>
 
 **Contents:** [Scenes](#scenes) · [Wallpapers](#wallpapers) · [Install](#install) · [Usage](#usage) · [Audio](#audio) · [How it works](#how-it-works) · [Development](#development) · [Release](#release) · [Credits](#credits)

@@ -21,12 +21,12 @@
 </div>
 
 <p align="center">
-  <img src="docs/night-pool.jpg" width="160" alt="壁纸 · 洞天：岩洞里的碧潭与长桌" />
-  <img src="docs/night-hearth.jpg" width="160" alt="壁纸 · 火塘：洞屋里的火塘，门外风雪" />
-  <img src="docs/night-wallpaper.jpg" width="160" alt="壁纸 · 月崖：崖下亮灯的门洞" />
-  <img src="docs/night-rain.jpg" width="160" alt="夜间 · 雨" />
-  <img src="docs/night-snow.jpg" width="160" alt="夜间 · 雪" />
-  <img src="docs/night-fire.jpg" width="160" alt="夜间 · 炉火" />
+  <img src="docs/night-pool.jpg" width="264" alt="壁纸 · 洞天：岩洞里的碧潭与长桌" />
+  <img src="docs/night-hearth.jpg" width="264" alt="壁纸 · 火塘：洞屋里的火塘，门外风雪" />
+  <img src="docs/night-wallpaper.jpg" width="264" alt="壁纸 · 月崖：崖下亮灯的门洞" />
+  <img src="docs/night-rain.jpg" width="264" alt="夜间 · 雨" />
+  <img src="docs/night-snow.jpg" width="264" alt="夜间 · 雪" />
+  <img src="docs/night-fire.jpg" width="264" alt="夜间 · 炉火" />
 </p>
 
 **目录：** [三种场景](#三种场景) · [壁纸](#壁纸) · [安装](#安装) · [使用](#使用) · [声音](#声音) · [工作原理](#工作原理) · [本地开发](#本地开发) · [发布](#发布) · [素材来源](#素材来源)
